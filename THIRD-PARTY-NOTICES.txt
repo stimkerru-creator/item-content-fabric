@@ -1,0 +1,19 @@
+Item Content Fabric
+
+The project uses the following build/runtime dependencies. Versions are pinned in
+gradle.properties and build.gradle.
+
+net.fabricmc:fabric-loader:0.15.11
+Apache License 2.0. https://github.com/FabricMC/fabric-loader/blob/0.15.11/LICENSE
+
+net.fabricmc.fabric-api:fabric-api:0.92.2+1.20.1
+Apache License 2.0. https://github.com/FabricMC/fabric/blob/0.92.2/LICENSE
+
+net.fabricmc:fabric-loom:1.6.12 (build plugin only)
+Apache License 2.0. https://github.com/FabricMC/fabric-loom/blob/1.6/LICENSE
+
+com.google.code.gson:gson (provided by Minecraft/Fabric runtime)
+Apache License 2.0. https://github.com/google/gson/blob/gson-parent-2.10.1/LICENSE
+
+Minecraft is a runtime dependency resolved by Fabric Loom and is not redistributed
+by this repository. The project source is MIT-licensed.
