@@ -1,6 +1,6 @@
 # Validation record
 
-The 1.0.0 release was checked with JDK 21 using Gradle 8.10.2 and Minecraft
+The 1.0.1 release was checked with JDK 21 using Gradle 8.10.2 and Minecraft
 1.20.1/Fabric Loader 0.15.11.
 
 | Check | Result |
@@ -11,6 +11,7 @@ The 1.0.0 release was checked with JDK 21 using Gradle 8.10.2 and Minecraft
 | headless `runServer` | passed |
 | registry log | `Registered item itemcontent:steel_plate` |
 | generated parameter catalog | created with `itemcontent:mass = 1.25` |
+| custom model configuration | parsed and accepted by unit tests |
 | server shutdown | clean after runtime check |
 | alongside `item-parameters-fabric-1.6.2-SNAPSHOT.jar` | passed; main mod loaded `1 item definitions and 0 formulas` |
 

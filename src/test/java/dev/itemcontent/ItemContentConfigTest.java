@@ -10,11 +10,12 @@ import static org.junit.jupiter.api.Assertions.*;
 final class ItemContentConfigTest {
     @Test void parsesShortIdsAndFields() throws Exception {
         var items = ItemContentConfig.parse("""
-                {"version":1,"items":[{"id":"plate","name":"Plate","fields":["mass",{"id":"hardness","default":25.00}]}]}
+                {"version":1,"items":[{"id":"plate","name":"Plate","custom_model":true,"fields":["mass",{"id":"hardness","default":25.00}]}]}
                 """);
         assertEquals(1, items.size());
         assertEquals("itemcontent:plate", items.get(0).id().toString());
         assertEquals("itemcontent:mass", items.get(0).fields().get(0).id());
+        assertTrue(items.get(0).customModel());
         assertEquals(25.00, items.get(0).fields().get(1).defaultValue().doubleValue());
     }
 

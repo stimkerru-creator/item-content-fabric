@@ -12,6 +12,7 @@ public final class ItemContentClient implements ClientModInitializer {
             if (!"itemcontent".equals(id.getNamespace()) || !id.getPath().startsWith("item/")) return null;
             var configured = ItemContentMod.items().get(new Identifier(id.getNamespace(), id.getPath().substring("item/".length())));
             if (configured == null) return null;
+            if (configured.customModel()) return null;
             Identifier sourceItem = new Identifier(configured.appearance());
             return modelContext.getOrLoadModel(new Identifier(sourceItem.getNamespace(), "item/" + sourceItem.getPath()));
         }));
