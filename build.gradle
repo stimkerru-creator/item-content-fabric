@@ -12,3 +12,6 @@ dependencies {
 processResources { inputs.property 'version', project.version; filesMatching('fabric.mod.json') { expand version: project.version } }
 java { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
 tasks.withType(Test).configureEach { useJUnitPlatform() }
+// Compile the desktop sources only into the test source set to verify its export
+// against the real runtime loader without bundling Swing into the Fabric JAR.
+sourceSets.test.java.srcDir 'editor/src/main/java'

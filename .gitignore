@@ -2,3 +2,5 @@
 .gradle-home/
 build/
 run/
+editor/.gradle/
+editor/build/

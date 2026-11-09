@@ -1,0 +1,15 @@
+{
+  "editorVersion": 1,
+  "items": [
+    {
+      "id": "itemcontent:steel_plate",
+      "name": "Стальная пластина",
+      "appearance": "minecraft:iron_ingot",
+      "texture": "",
+      "customModel": false,
+      "fireproof": false,
+      "maxCount": 64,
+      "fields": []
+    }
+  ]
+}

@@ -12,8 +12,10 @@ Apache License 2.0. https://github.com/FabricMC/fabric/blob/0.92.2/LICENSE
 net.fabricmc:fabric-loom:1.6.12 (build plugin only)
 Apache License 2.0. https://github.com/FabricMC/fabric-loom/blob/1.6/LICENSE
 
-com.google.code.gson:gson (provided by Minecraft/Fabric runtime)
+com.google.code.gson:gson:2.10.1 (bundled in the standalone editor; provided by Minecraft/Fabric in the mod)
 Apache License 2.0. https://github.com/google/gson/blob/gson-parent-2.10.1/LICENSE
+Gson copyright: Google Inc. and contributors. The complete Apache 2.0 license
+is included in the editor at META-INF/licenses/Apache-2.0.txt.
 
 Minecraft is a runtime dependency resolved by Fabric Loom and is not redistributed
 by this repository. The project source is MIT-licensed.
