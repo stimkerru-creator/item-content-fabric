@@ -18,14 +18,24 @@ Item Content создаёт типы предметов. Item Parameters хра�
 - Сохранение редактируемого проекта и экспорт конфигурации с resource pack.
 - Необязательные начальные параметры для совместимости с Item Parameters.
 
-## Запуск приложения
+## Запуск готового приложения
+
+Распакуйте готовый `item-content-1.0.3.zip` целиком и откройте **`run-editor.bat`**.
+Нужна Java 17+, установка JDK и Gradle для готового выпуска не требуется.
+Внутри находятся редактор, мод, пример проекта и инструкции. На Linux/macOS:
+
+```text
+java -jar lib/item-content-editor-1.0.3.jar
+```
+
+## Запуск из исходников
 
 Нужна Java 17 или новее. В Windows откройте **`run-editor.bat`** в корне проекта.
 Если редактор ещё не собран, запускатель соберёт его; для первой сборки нужен JDK и доступ
 к репозиториям зависимостей. Готовый JAR запускается так:
 
 ```text
-java -jar editor/build/libs/item-content-editor-1.0.2.jar
+java -jar editor/build/libs/item-content-editor-1.0.3.jar
 ```
 
 Кнопкой **«Открыть…»** можно открыть пример **`examples/steel-plate.icproject`**.
@@ -57,7 +67,7 @@ java -jar editor/build/libs/item-content-editor-1.0.2.jar
 ## Установка результата в Minecraft
 
 1. Установите Fabric Loader и Fabric API для Minecraft **1.20.1**.
-2. Поместите `build/libs/item-content-fabric-1.0.2.jar` в `mods` сервера и каждого клиента.
+2. Поместите `build/libs/item-content-fabric-1.0.3.jar` в `mods` сервера и каждого клиента.
 3. Скопируйте из экспорта `config/item-content` в `config` сервера и каждого клиента.
    Описания предметов должны совпадать до подключения.
 4. На клиенте скопируйте `resourcepacks/item-content` в папку `resourcepacks` игры
@@ -101,6 +111,9 @@ java -jar editor/build/libs/item-content-editor-1.0.2.jar
 - [Редактор: пошаговое руководство](docs/editor.md)
 - [Технический формат конфигурации и resource pack](docs/configuration.md)
 - [Проверки и ограничения](docs/validation.md)
+- [Соответствие требованиям и ограничения](docs/requirements-audit.md)
+- [Разработка и упаковка выпуска](docs/development.md)
+- [Участие в разработке](CONTRIBUTING.md)
 - [История изменений](CHANGELOG.md)
 - [Лицензия MIT](LICENSE)
 - [Сторонние библиотеки](THIRD-PARTY-NOTICES.txt)

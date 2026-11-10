@@ -1,4 +1,4 @@
-param([switch]$Check, [string]$Screenshot)
+﻿param([switch]$Check, [string]$Screenshot)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $javaCandidates = @()
@@ -36,8 +36,13 @@ foreach ($candidate in ($javaCandidates | Select-Object -Unique)) {
 if (!$selectedJava) { throw 'Install Java 17 or newer, then run this launcher again.' }
 $versionLine = Get-Content (Join-Path $projectRoot 'gradle.properties') | Where-Object { $_ -match '^version=' }
 $version = ($versionLine -split '=', 2)[1].Trim()
-$jar = Join-Path $projectRoot "editor\build\libs\item-content-editor-$version.jar"
+$jar = Join-Path $projectRoot "lib\item-content-editor-$version.jar"
+if (!(Test-Path -LiteralPath $jar)) { $jar = Join-Path $projectRoot "editor\build\libs\item-content-editor-$version.jar" }
 if (!(Test-Path -LiteralPath $jar)) {
+    if (!(Test-Path -LiteralPath (Join-Path $projectRoot 'gradlew.bat'))) {
+        throw 'Editor JAR is missing. Extract the complete release ZIP before launching.'
+    }
+    $env:GRADLE_USER_HOME = Join-Path $projectRoot '.gradle-home'
     $env:JAVA_HOME = Split-Path -Parent (Split-Path -Parent $selectedJava)
     & (Join-Path $projectRoot 'gradlew.bat') -p (Join-Path $projectRoot 'editor') build --no-daemon
     if ($LASTEXITCODE -ne 0) { throw 'Editor build failed. See the messages above.' }

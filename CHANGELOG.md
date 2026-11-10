@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.3
+
+- Reject fractional stack limits, invalid property types, duplicate parameter IDs and misspelled field keys before registration.
+- Keep parameter IDs unique when adding after deletion; preserve active cell edits when switching items.
+- Preserve PNG proportions in the preview.
+- Ship a ready-to-run release ZIP, artifact checks and a requirements audit.
+- Include the project license and third-party notices in the Fabric artifact.
+
 ## 1.0.2
 
 - Add a separate desktop item constructor in this repository, with its own launcher.

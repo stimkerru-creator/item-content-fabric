@@ -15,3 +15,14 @@ tasks.withType(Test).configureEach { useJUnitPlatform() }
 // Compile the desktop sources only into the test source set to verify its export
 // against the real runtime loader without bundling Swing into the Fabric JAR.
 sourceSets.test.java.srcDir 'editor/src/main/java'
+
+// Include our license in the distributed mod, alongside Minecraft-provided dependencies.
+tasks.named('jar') {
+    from('LICENSE') { rename { 'LICENSE-item-content.txt' } }
+    from('THIRD-PARTY-NOTICES.txt')
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 17
+    options.encoding = 'UTF-8'
+}

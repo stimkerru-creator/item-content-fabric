@@ -29,4 +29,34 @@ final class ItemContentConfigTest {
         assertThrows(IOException.class, () -> ItemContentConfig.parse("{\"version\":1,\"items\":[{\"id\":\"plate\",\"name\":\"x\",\"unexpected\":true}]}"));
         assertThrows(IOException.class, () -> ItemContentConfig.parse("{\"version\":1,\"items\":[{\"id\":\"plate\",\"name\":\"x\",\"max_count\":0}]}"));
     }
+    @Test void rejectsMalformedTypesWithoutLeakingRuntimeExceptions() {
+        for (String json : new String[]{"null", "[]", "1", "{\"version\":1,\"items\":null}",
+                "{\"version\":1,\"items\":[null]}",
+                "{\"version\":1,\"items\":[{\"id\":\"plate\",\"name\":\"x\",\"fields\":null}]}"})
+            assertThrows(IOException.class, () -> ItemContentConfig.parse(json), json);
+    }
+
+    @Test void rejectsTruncatedIntegersAndCoercedBooleanValues() {
+        for (String property : new String[]{"\"max_count\":16.5", "\"max_count\":4294967297",
+                "\"max_count\":\"16\"", "\"fireproof\":\"true\"", "\"custom_model\":1"})
+            assertThrows(IOException.class, () -> ItemContentConfig.parse(
+                    "{\"version\":1,\"items\":[{\"id\":\"plate\",\"name\":\"x\"," + property + "}]}"), property);
+        assertThrows(IOException.class, () -> ItemContentConfig.parse("{\"version\":1.5,\"items\":[]}"));
+    }
+
+    @Test void rejectsDuplicateAndInvalidParameterIdsAndMisspelledKeys() {
+        for (String fields : new String[]{"[\"mass\",\"itemcontent:mass\"]", "[\"bad field\"]",
+                "[{\"id\":\"mass\",\"defualt\":5}]", "[{\"id\":\"mass\",\"default\":\"5\"}]"})
+            assertThrows(IOException.class, () -> ItemContentConfig.parse(
+                    "{\"version\":1,\"items\":[{\"id\":\"plate\",\"name\":\"x\",\"fields\":" + fields + "}]}"), fields);
+    }
+
+    @Test void preservesBothInt32BoundariesExactly() throws Exception {
+        var fields = ItemContentConfig.parse("""
+                {"version":1,"items":[{"id":"plate","name":"x","fields":[
+                {"id":"low","default":-21474836.48}, {"id":"high","default":21474836.47}]}]}
+                """).get(0).fields();
+        assertEquals(Integer.MIN_VALUE, fields.get(0).defaultValue().movePointRight(2).intValueExact());
+        assertEquals(Integer.MAX_VALUE, fields.get(1).defaultValue().movePointRight(2).intValueExact());
+    }
 }

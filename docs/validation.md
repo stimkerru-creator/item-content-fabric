@@ -1,5 +1,34 @@
 # Validation record
 
+## 1.0.3 — 2026-11-10
+
+Local checks used JDK 21 with `--release 17` for both compilation targets.
+
+| Check | Result |
+|---|---|
+| `gradlew.bat build --offline --no-daemon` | passed |
+| Runtime parser + desktop/runtime compatibility | 12 tests, 0 failures/errors |
+| `gradlew.bat -p editor build --offline --no-daemon` | passed |
+| Standalone project and Swing actions | 15 tests, 0 failures/errors |
+| Total | **27 tests passed** |
+| `python tools/package-release.py` | Java 17 bytecode, version, licenses and JAR separation passed |
+| Windows launcher + current editor screenshot | launched and visually inspected at 1180×780 |
+| Extracted release ZIP, without source tree or Gradle | launcher selected `lib` JAR; editor launched successfully |
+| `git diff --check` | passed |
+
+Regression coverage added for fractional/overflowing integers, wrong JSON types,
+malformed structures, duplicate fields, misspelled keys, exact signed-int32 boundaries,
+adding a field after deleting a row, and switching items while a table cell is being edited.
+The packaging check verifies that the Fabric JAR contains no desktop classes and that
+its desktop counterpart contains Gson and its full license, with no Minecraft or first-project dependency.
+
+Server startup and coexistence with Item Parameters were established for 1.0.2 below.
+A new 1.0.3 server startup and a manual in-game PNG acceptance test have **not** been performed.
+No 4096-item load benchmark or broad third-party-modpack test is claimed.
+GitHub Actions is configured for Java 17; this local record does not claim a remote CI result.
+
+See the [requirements and usability audit](requirements-audit.md) for supported features and remaining limits.
+
 ## 1.0.2: separate item constructor
 
 Verified with JDK 21, targeting Java 17 bytecode:

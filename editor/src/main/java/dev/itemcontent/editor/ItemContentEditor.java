@@ -110,7 +110,7 @@ public final class ItemContentEditor {
             parameterPanel.add(new JLabel("<html>Необязательно. Начальные характеристики для мода Item Parameters.<br>Рецепты и формулы настраиваются в отдельном первом проекте.</html>"), BorderLayout.NORTH);
             table.setRowHeight(28); table.setName("parameters"); parameterPanel.add(new JScrollPane(table), BorderLayout.CENTER);
             JPanel parameterActions = new JPanel(new FlowLayout(FlowLayout.LEFT));
-            button(parameterActions, "+ Параметр", "addField", () -> { if (current != null) fields.addRow(new Object[]{"itemcontent:parameter_" + (fields.getRowCount() + 1), "0", "-21474836.48", "21474836.47"}); });
+            button(parameterActions, "+ Параметр", "addField", () -> { if (current != null) fields.addRow(new Object[]{nextFieldId(), "0", "-21474836.48", "21474836.47"}); });
             button(parameterActions, "Удалить параметр", "removeField", () -> { int row = table.getSelectedRow(); if (row >= 0) { stopTable(); fields.removeRow(row); } });
             parameterPanel.add(parameterActions, BorderLayout.SOUTH);
             JTabbedPane tabs = new JTabbedPane(); tabs.addTab("Предмет и картинка", card); tabs.addTab("Начальные параметры (необязательно)", parameterPanel);
@@ -121,7 +121,14 @@ public final class ItemContentEditor {
 
             list.addListSelectionListener(e -> {
                 if (e.getValueIsAdjusting() || refreshing) return;
-                commit(); current = list.getSelectedValue(); showCurrent();
+                try {
+                    commit(); current = list.getSelectedValue(); showCurrent();
+                } catch (IllegalArgumentException failure) {
+                    refreshing = true;
+                    list.setSelectedValue(current, true);
+                    refreshing = false;
+                    status.setText("Сначала исправьте данные текущего предмета: " + failure.getMessage());
+                }
             });
             DocumentListener listener = new DocumentListener() {
                 public void insertUpdate(DocumentEvent e) { changed(); }
@@ -131,6 +138,7 @@ public final class ItemContentEditor {
             };
             name.getDocument().addDocumentListener(listener); id.getDocument().addDocumentListener(listener); appearance.getDocument().addDocumentListener(listener);
             maxCount.addChangeListener(e -> { if (!refreshing) dirty = true; });
+            ((JSpinner.DefaultEditor) maxCount.getEditor()).getTextField().getDocument().addDocumentListener(listener);
             fireproof.addActionListener(e -> dirty = true);
             custom.addActionListener(e -> { dirty = true; updateImage(); });
             fields.addTableModelListener(e -> { if (!refreshing) dirty = true; });
@@ -166,6 +174,13 @@ public final class ItemContentEditor {
             if (!listModel.isEmpty()) list.setSelectedIndex(Math.min(index, listModel.size() - 1)); else showCurrent();
             dirty = true;
         }
+        private String nextFieldId() {
+            java.util.Set<String> ids = new java.util.HashSet<>();
+            for (int row = 0; row < fields.getRowCount(); row++) ids.add(cell(row, 0));
+            int next = 1;
+            while (ids.contains("itemcontent:parameter_" + next)) next++;
+            return "itemcontent:parameter_" + next;
+        }
         private void stopTable() { if (table.isEditing()) table.getCellEditor().stopCellEditing(); }
         private void commit() {
             if (refreshing || current == null) return;
@@ -198,11 +213,13 @@ public final class ItemContentEditor {
             preview.setIcon(null); preview.setText(custom.isSelected() ? "Выберите PNG" : "Готовая модель");
             texturePath.setText("Используется готовая модель Minecraft."); texturePath.setToolTipText(null);
             if (custom.isSelected() && selectedTexture != null && !selectedTexture.isBlank()) {
-                texturePath.setText(Path.of(selectedTexture).getFileName().toString()); texturePath.setToolTipText(selectedTexture);
                 try {
+                    texturePath.setText(Path.of(selectedTexture).getFileName().toString()); texturePath.setToolTipText(selectedTexture);
                     ItemProject.validatePng(Path.of(selectedTexture));
                     BufferedImage image = ImageIO.read(Path.of(selectedTexture).toFile());
-                    preview.setIcon(new ImageIcon(image.getScaledInstance(128, 128, Image.SCALE_REPLICATE))); preview.setText("");
+                    double scale = Math.min(128.0 / image.getWidth(), 128.0 / image.getHeight());
+                    preview.setIcon(new ImageIcon(image.getScaledInstance(Math.max(1, (int) (image.getWidth() * scale)),
+                            Math.max(1, (int) (image.getHeight() * scale)), Image.SCALE_REPLICATE))); preview.setText("");
                 } catch (Exception e) { preview.setText("PNG недоступна"); }
             }
         }
