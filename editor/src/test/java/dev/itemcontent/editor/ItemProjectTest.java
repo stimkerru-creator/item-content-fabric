@@ -16,20 +16,20 @@ class ItemProjectTest {
         var entry = new ItemProject.Entry(); entry.id = "itemcontent:steel_plate"; entry.name = "Стальная пластина";
         project.items.add(entry); return project;
     }
-    @Test void saveAndOpenPreservePropertiesAndParameters() throws Exception {
+    @Test void saveAndOpenPreserveItemProperties() throws Exception {
         var project = project(); var item = project.items.get(0);
         item.fireproof = true; item.maxCount = 16;
-        var field = new ItemProject.Field(); field.value = "1,25"; item.fields.add(field);
         Path path = temp.resolve("items.icproject"); project.save(path);
         var loaded = ItemProject.load(path).items.get(0);
         assertEquals(item.id, loaded.id); assertEquals(item.name, loaded.name);
-        assertTrue(loaded.fireproof); assertEquals(16, loaded.maxCount); assertEquals("1,25", loaded.fields.get(0).value);
+        assertTrue(loaded.fireproof); assertEquals(16, loaded.maxCount);
     }
     @Test void exportProducesConfigWithNoRecipesOrDuplicatedParameterCatalog() throws Exception {
         var project = project(); Path target = temp.resolve("export"); project.export(target);
         JsonObject root = JsonParser.parseString(Files.readString(target.resolve("config/item-content/items.json"))).getAsJsonObject();
         assertEquals(1, root.get("version").getAsInt());
         assertEquals("itemcontent:steel_plate", root.getAsJsonArray("items").get(0).getAsJsonObject().get("id").getAsString());
+        assertFalse(root.getAsJsonArray("items").get(0).getAsJsonObject().has("fields"));
         assertFalse(Files.exists(target.resolve("config/itemparams"))); assertFalse(root.has("recipes"));
         assertTrue(Files.exists(target.resolve("INSTALL.txt")));
     }
@@ -65,16 +65,34 @@ class ItemProjectTest {
         var project = project(); project.items.get(0).id = "itemcontent:../../escape";
         assertThrows(IllegalArgumentException.class, () -> project.export(temp.resolve("export")));
     }
-    @Test void invalidParametersCannotOverwriteSavedProject() throws Exception {
-        var project = project(); Path file = temp.resolve("saved.icproject"); project.save(file); byte[] before = Files.readAllBytes(file);
-        var field = new ItemProject.Field(); field.value = "1.001"; project.items.get(0).fields.add(field);
-        assertThrows(IllegalArgumentException.class, () -> project.save(file)); assertArrayEquals(before, Files.readAllBytes(file));
-        field.value = "21474836.48"; assertThrows(IllegalArgumentException.class, project::validate);
+    @Test void invalidItemCannotOverwriteSavedList() throws Exception {
+        var project = project(); Path file = temp.resolve("saved.icproject"); project.save(file);
+        byte[] before = Files.readAllBytes(file); project.items.get(0).maxCount = 0;
+        assertThrows(IllegalArgumentException.class, () -> project.save(file));
+        assertArrayEquals(before, Files.readAllBytes(file));
     }
-    @Test void invalidRangeAndRepeatedFieldsAreRejected() {
-        var project = project(); var field = new ItemProject.Field(); field.value = "2"; field.max = "1"; project.items.get(0).fields.add(field);
-        assertThrows(IllegalArgumentException.class, project::validate); field.max = "10";
-        project.items.get(0).fields.add(field); assertThrows(IllegalArgumentException.class, project::validate);
+    @Test void legacyDataIsBackedUpBeforeSavingAndNeverExported() throws Exception {
+        String original = "{\"editorVersion\":1,\"items\":[{\"id\":\"itemcontent:plate\",\"name\":\"Plate\",\"fields\":[{\"id\":\"mass\",\"value\":\"12.34\"}]}]}";
+        Path file = temp.resolve("legacy.icproject"); Files.writeString(file, original);
+        var project = ItemProject.load(file); assertTrue(project.hasLegacyData());
+        assertEquals(original, Files.readString(file));
+        project.export(temp.resolve("legacy-export"));
+        assertFalse(Files.readString(temp.resolve("legacy-export/config/item-content/items.json")).contains("fields"));
+        assertEquals(original, Files.readString(file));
+        project.items.get(0).name = "New name"; project.save(file);
+        assertEquals(original, Files.readString(project.legacyBackup()));
+        assertFalse(Files.readString(file).contains("fields"));
+        assertEquals("New name", ItemProject.load(file).items.get(0).name);
+        Path backup = project.legacyBackup(); project.save(file); assertEquals(backup, project.legacyBackup());
+    }
+    @Test void legacyDataIsProtectedEvenWhenSavingAsAnotherFile() throws Exception {
+        Path file = temp.resolve("legacy.icproject");
+        String original = "{\"editorVersion\":1,\"items\":[{\"fields\":[\"old mass\"]}]}";
+        Files.writeString(file, original); var project = ItemProject.load(file);
+        project.save(temp.resolve("new.icproject"));
+        assertEquals(original, Files.readString(file));
+        assertEquals(original, Files.readString(project.legacyBackup()));
+        assertFalse(Files.readString(temp.resolve("new.icproject")).contains("fields"));
     }
     @Test void unknownProjectVersionIsRejected() throws Exception {
         Path file = temp.resolve("future.icproject"); Files.writeString(file, "{\"editorVersion\":99,\"items\":[]}");

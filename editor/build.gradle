@@ -12,7 +12,7 @@ dependencies {
 application { mainClass = 'dev.itemcontent.editor.ItemContentEditor' }
 java { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
 tasks.withType(JavaCompile).configureEach { options.release = 17; options.encoding = 'UTF-8' }
-tasks.withType(Test).configureEach { useJUnitPlatform(); systemProperty 'java.awt.headless', 'true' }
+tasks.withType(Test).configureEach { useJUnitPlatform(); systemProperty 'java.awt.headless', 'true'; systemProperty 'flatlaf.uiScale', project.findProperty('testUiScale') ?: '1' }
 tasks.named('jar') {
     manifest { attributes 'Main-Class': application.mainClass.get() }
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE

@@ -8,8 +8,7 @@
       "texture": "",
       "customModel": false,
       "fireproof": false,
-      "maxCount": 64,
-      "fields": []
+      "maxCount": 64
     }
   ]
 }

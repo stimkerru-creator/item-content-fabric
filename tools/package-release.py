@@ -12,6 +12,9 @@ editor = ROOT / f"editor/build/libs/item-content-editor-{VERSION}.jar"
 with ZipFile(mod) as jar:
     metadata = json.loads(jar.read("fabric.mod.json"))
     assert metadata["version"] == VERSION, "Wrong mod version"
+    assert set(metadata["depends"]) == {"fabricloader", "minecraft", "java", "fabric-api"}
+    assert "dev/itemcontent/config/ParameterCatalogWriter.class" not in jar.namelist()
+    assert not any(name.startswith("dev/itemparams/") for name in jar.namelist())
     assert "LICENSE-item-content.txt" in jar.namelist(), "Missing mod license"
     assert not any(name.startswith(("dev/itemcontent/editor/", "com/formdev/")) for name in jar.namelist()), "Editor or FlatLaf leaked into mod"
     assert int.from_bytes(jar.read("dev/itemcontent/ItemContentMod.class")[6:8], "big") == 61
@@ -46,7 +49,7 @@ No JDK or Gradle is needed to run this prebuilt editor.
 Open examples/steel-plate.icproject for a working example.
 Follow docs/editor.md for images, export and installation.
 mods/ contains the Fabric mod for client and server; it is not a desktop application.
-Recipes and formulas belong to the separate Item Parameters project.
+Item Content works independently. Custom numeric stats and recipes are not part of this tool.
 """)
 checksums = out / f"item-content-{VERSION}-SHA256SUMS.txt"
 checksums.write_text("".join(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n"

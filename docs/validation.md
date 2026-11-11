@@ -1,5 +1,35 @@
 # Validation record
 
+## 1.1.1 — 2026-11-12
+
+- Numeric characteristics removed from editor, item model and export; catalog generation removed.
+- Item Content and Item Parameters are independently installable. Fabric metadata requires only
+  Fabric Loader, Minecraft, Java and Fabric API; no parameter mod is referenced by runtime code.
+- Regression test reproduced text clipping before the fix. After removing forced input heights,
+  it verifies font/interior height for every JTextField, including the spinner editor.
+- Standalone editor: 22 tests passed (13 persistence/export, 9 UI workflow checks).
+- Runtime and desktop-export compatibility: 8 tests passed. Total: **30 tests**.
+- Editor tests also passed with `testUiScale=1.25` and `testUiScale=1.5`.
+- Legacy documents retain their complete original in a unique backup before saving; new exports
+  contain no `fields` or parameter catalog. Tests cover Save and Save As.
+- A separate Fabric server in `build/standalone-smoke` loaded Item Content 1.1.1 and Fabric API,
+  without Item Parameters. It registered `itemcontent:standalone_plate` and reached `Done`.
+  It did not create `config/itemparams`. The dedicated test JVM was terminated after startup;
+  no claim of a clean server shutdown or new in-game client acceptance test is made.
+  OS performance-counter warnings and a flat-world generator settings message appeared in this test.
+- Actual Windows editor 1.1.1 launched and captured at 1280×680 and maximized size.
+  Text in name, ID, model and stack fields was inspected in both captures; the characteristics tab is absent.
+  Rendered screenshots were also inspected with FlatLaf user-scale properties 1.25 and 1.5.
+- Coexistence test with Item Parameters 1.6.2-SNAPSHOT also reached `Done` in a separate environment:
+  Item Content registered `steel_plate` and `plain_plate`, while Item Parameters loaded only the
+  explicitly authored `steel_plate` definition. The manual catalog remained byte-for-byte unchanged;
+  no `itemcontent_generated.json` appeared. The server was stopped through its loopback RCON.
+  First-start Fabric remapping of the nested dependency JARs took about 100 seconds and reported
+  temporary-JAR cleanup warnings; this is startup preparation, not item-use or formula execution time.
+- The earlier 1.1.0 visual verification below missed clipped input text. Its tests did not establish
+  correct text rendering; that claim is superseded by the reproduced regression and corrected screenshots.
+
+
 ## 1.1.0 — 2026-11-12
 
 - Standalone editor: `gradlew.bat -p editor build --offline --no-daemon` passed.

@@ -24,31 +24,13 @@ class EditorPanelTest {
             assertNull(find(panel, "formula"));
         });
     }
-    @Test void addingFieldAfterDeletingMiddleRowKeepsIdsUnique() throws Exception {
+    @Test void editorContainsOnlyItemControls() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             var panel = new ItemContentEditor.EditorPanel();
-            var table = (JTable) find(panel, "parameters");
-            var add = (JButton) find(panel, "addField");
-            add.doClick(); add.doClick(); add.doClick();
-            table.setRowSelectionInterval(1, 1);
-            ((JButton) find(panel, "removeField")).doClick(); add.doClick();
-            var ids = new java.util.HashSet<>();
-            for (int row = 0; row < table.getRowCount(); row++) assertTrue(ids.add(table.getValueAt(row, 0)));
-        });
-    }
-
-    @Test void switchingCommitsAnActiveParameterCellToTheCorrectItem() throws Exception {
-        SwingUtilities.invokeAndWait(() -> {
-            var panel = new ItemContentEditor.EditorPanel();
-            var list = (JList<?>) find(panel, "items");
-            var table = (JTable) find(panel, "parameters");
-            ((JButton) find(panel, "addField")).doClick();
-            assertTrue(table.editCellAt(0, 1));
-            ((JTextField) table.getEditorComponent()).setText("12,34");
-            ((JButton) find(panel, "addItem")).doClick();
-            assertEquals(0, table.getRowCount());
-            list.setSelectedIndex(0);
-            assertEquals("12,34", table.getValueAt(0, 1));
+            for (String absent : new String[]{"parameters", "addField", "removeField", "formula", "itemTabs"})
+                assertNull(find(panel, absent), absent);
+            assertNotNull(find(panel, "itemName"));
+            assertNotNull(find(panel, "choosePng"));
         });
     }
 
@@ -58,12 +40,10 @@ class EditorPanelTest {
             var name = (JTextField) find(panel, "itemName");
             var search = (JTextField) find(panel, "searchItems");
             var list = (JList<?>) find(panel, "items");
-            var table = (JTable) find(panel, "parameters");
-            name.setText("Пластина"); ((JButton) find(panel, "addField")).doClick();
-            table.setValueAt("1,25", 0, 1);
+            name.setText("Пластина");
             ((JButton) find(panel, "addItem")).doClick(); name.setText("Шарнир");
             search.setText("пласт"); assertEquals(1, list.getModel().getSize());
-            assertEquals("Пластина", name.getText()); assertEquals("1,25", table.getValueAt(0, 1));
+            assertEquals("Пластина", name.getText());
             search.setText("несуществующий"); assertEquals(0, list.getModel().getSize());
             assertFalse(name.isEnabled());
             search.setText(""); assertEquals(2, list.getModel().getSize());
@@ -71,20 +51,20 @@ class EditorPanelTest {
         });
     }
 
-    @Test void duplicateHasIndependentFieldsAndANewId() throws Exception {
+    @Test void duplicateHasIndependentPropertiesAndANewId() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             var panel = new ItemContentEditor.EditorPanel();
             var name = (JTextField) find(panel, "itemName");
             var id = (JTextField) find(panel, "itemId");
             var list = (JList<?>) find(panel, "items");
-            var table = (JTable) find(panel, "parameters");
             name.setText("Пластина"); String originalId = id.getText();
-            ((JButton) find(panel, "addField")).doClick(); table.setValueAt("25", 0, 1);
+            ((JTextField) find(panel, "appearance")).setText("minecraft:gold_ingot");
             ((JButton) find(panel, "duplicateItem")).doClick();
             assertEquals(2, list.getModel().getSize()); assertNotEquals(originalId, id.getText());
-            assertEquals("25", table.getValueAt(0, 1)); table.setValueAt("30", 0, 1);
-            list.setSelectedIndex(0); assertEquals("Пластина", name.getText()); assertEquals("25", table.getValueAt(0, 1));
-            list.setSelectedIndex(1); assertEquals("30", table.getValueAt(0, 1));
+            var appearance = (JTextField) find(panel, "appearance");
+            assertEquals("minecraft:gold_ingot", appearance.getText()); appearance.setText("minecraft:copper_ingot");
+            list.setSelectedIndex(0); assertEquals("Пластина", name.getText()); assertEquals("minecraft:gold_ingot", appearance.getText());
+            list.setSelectedIndex(1); assertEquals("minecraft:copper_ingot", appearance.getText());
         });
     }
 
@@ -96,14 +76,13 @@ class EditorPanelTest {
             try {
                 var panel = new ItemContentEditor.EditorPanel(); panel.openList(file);
                 ((JTextField) find(panel, "itemName")).setText("Стальная пластина");
-                ((JButton) find(panel, "addField")).doClick();
-                ((JTable) find(panel, "parameters")).setValueAt("1,25", 0, 1);
+                ((JTextField) find(panel, "appearance")).setText("minecraft:gold_ingot");
                 panel.getActionMap().get("saveList").actionPerformed(new java.awt.event.ActionEvent(panel, 0, "save"));
             } catch (Exception failure) { throw new RuntimeException(failure); }
         });
         var loaded = ItemProject.load(file);
         assertEquals(2, loaded.items.size()); assertEquals("Стальная пластина", loaded.items.get(0).name);
-        assertEquals("1,25", loaded.items.get(0).fields.get(0).value); assertEquals("Шарнир", loaded.items.get(1).name);
+        assertEquals("minecraft:gold_ingot", loaded.items.get(0).appearance); assertEquals("Шарнир", loaded.items.get(1).name);
     }
 
     @Test void initialWindowFitsTheAvailableSmallDesktop() {
@@ -144,6 +123,26 @@ class EditorPanelTest {
                 assertFalse(((JTextField) find(panel, "appearance")).isEnabled());
             } catch (Exception failure) { throw new RuntimeException(failure); }
         });
+    }
+
+    @Test void textFieldsHaveEnoughInteriorHeightForTheirFont() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            var panel = new ItemContentEditor.EditorPanel();
+            panel.setSize(1264, 641); layout(panel);
+            assertTextHeight(panel);
+        });
+    }
+
+    private void assertTextHeight(Container parent) {
+        for (Component child : parent.getComponents()) {
+            if (child instanceof JTextField field) {
+                Insets insets = field.getInsets();
+                int interior = field.getHeight() - insets.top - insets.bottom;
+                assertTrue(interior >= field.getFontMetrics(field.getFont()).getHeight(),
+                        field.getName() + ": interior=" + interior + ", font=" + field.getFontMetrics(field.getFont()).getHeight());
+            }
+            if (child instanceof Container container) assertTextHeight(container);
+        }
     }
 
     private void layout(Container parent) {

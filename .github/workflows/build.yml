@@ -19,6 +19,8 @@ jobs:
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
       - run: ./gradlew -p editor build --no-daemon
+      - run: ./gradlew -p editor test --no-daemon -PtestUiScale=1.25
+      - run: ./gradlew -p editor test --no-daemon -PtestUiScale=1.5
 
   fabric:
     runs-on: ubuntu-latest

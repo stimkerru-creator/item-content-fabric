@@ -4,7 +4,6 @@ import com.google.gson.*;
 import javax.imageio.ImageIO;
 import javax.imageio.stream.ImageInputStream;
 import java.io.IOException;
-import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
@@ -14,19 +13,18 @@ public final class ItemProject {
     private static final Gson JSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
     private static final long MAX_BYTES = 4L * 1024 * 1024;
     public final List<Entry> items = new ArrayList<>();
+    private String legacyDocument;
+    private Path legacySource, legacyBackup;
+    public boolean hasLegacyData() { return legacyDocument != null; }
+    public Path legacyBackup() { return legacyBackup; }
 
     public static final class Entry {
         public String id = "itemcontent:new_item", name = "Новый предмет";
         public String appearance = "minecraft:iron_ingot", texture = "";
         public boolean customModel, fireproof;
         public int maxCount = 64;
-        public List<Field> fields = new ArrayList<>();
         @Override public String toString() { return name + "  (" + id + ")"; }
     }
-    public static final class Field {
-        public String id = "itemcontent:mass", value = "0", min = "-21474836.48", max = "21474836.47";
-    }
-
     public void validate() {
         if (items.isEmpty()) throw new IllegalArgumentException("Добавьте хотя бы один предмет.");
         if (items.size() > 4096) throw new IllegalArgumentException("Допускается до 4096 типов предметов.");
@@ -40,16 +38,7 @@ public final class ItemProject {
                 throw new IllegalArgumentException("Название предмета должно содержать от 1 до 128 символов.");
             identifier(item.appearance);
             if (item.maxCount < 1 || item.maxCount > 99) throw new IllegalArgumentException("Размер стака: от 1 до 99.");
-            if (item.fields == null || item.fields.size() > 4096) throw new IllegalArgumentException("Допускается до 4096 параметров предмета.");
-            Set<String> fieldIds = new HashSet<>();
-            for (Field field : item.fields) {
-                if (field == null) throw new IllegalArgumentException("Пустой параметр предмета.");
-                identifier(field.id);
-                if (!fieldIds.add(field.id)) throw new IllegalArgumentException("Повторяется ID параметра: " + field.id);
-                BigDecimal value = decimal(field.value), min = decimal(field.min), max = decimal(field.max);
-                if (min.compareTo(max) > 0 || value.compareTo(min) < 0 || value.compareTo(max) > 0)
-                    throw new IllegalArgumentException("Начальное значение вне диапазона: " + field.id);
-            }
+
         }
     }
     private static void identifier(String id) {
@@ -59,30 +48,36 @@ public final class ItemProject {
         if (Arrays.stream(path.split("/", -1)).anyMatch(p -> p.isEmpty() || p.equals(".") || p.equals("..")))
             throw new IllegalArgumentException("В ID недопустимы пустые части пути, . и ..: " + id);
     }
-    private static BigDecimal decimal(String text) {
-        try {
-            BigDecimal value = new BigDecimal(text.trim().replace(',', '.'));
-            value.movePointRight(2).intValueExact();
-            return value;
-        } catch (RuntimeException e) {
-            throw new IllegalArgumentException("Нужно число с точностью до сотых в диапазоне −21474836,48…21474836,47: " + text);
-        }
-    }
     public void save(Path file) throws IOException {
         validate();
         JsonObject root = new JsonObject(); root.addProperty("editorVersion", 1);
         root.add("items", JSON.toJsonTree(items));
         String text = JSON.toJson(root);
         if (text.getBytes(StandardCharsets.UTF_8).length > MAX_BYTES) throw new IOException("Список предметов больше 4 МиБ.");
+        if (legacyDocument != null) {
+            Path backup = Files.createTempFile(legacySource.getParent(), legacySource.getFileName() + ".before-item-only-", ".bak");
+            Files.writeString(backup, legacyDocument, StandardCharsets.UTF_8);
+            legacyBackup = backup;
+            legacyDocument = null;
+        }
         writeAtomic(file.toAbsolutePath(), text);
     }
     public static ItemProject load(Path file) throws IOException {
         if (Files.size(file) > MAX_BYTES) throw new IOException("Список предметов больше 4 МиБ.");
         try {
-            JsonObject root = JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8)).getAsJsonObject();
+            String source = Files.readString(file, StandardCharsets.UTF_8);
+            JsonObject root = JsonParser.parseString(source).getAsJsonObject();
             if (root.get("editorVersion").getAsBigDecimal().intValueExact() != 1) throw new IOException("Эта версия списка предметов не поддерживается.");
             Entry[] entries = JSON.fromJson(root.get("items"), Entry[].class);
             ItemProject result = new ItemProject(); result.items.addAll(Arrays.asList(entries)); result.validate();
+            for (JsonElement element : root.getAsJsonArray("items")) {
+                JsonElement old = element.getAsJsonObject().get("fields");
+                if (old != null && (!old.isJsonArray() || !old.getAsJsonArray().isEmpty())) {
+                    result.legacyDocument = source;
+                    result.legacySource = file.toAbsolutePath();
+                    break;
+                }
+            }
             return result;
         } catch (RuntimeException e) { throw new IOException("Не удалось открыть список предметов: " + e.getMessage(), e); }
     }
@@ -104,13 +99,7 @@ public final class ItemProject {
             object.addProperty("id", item.id); object.addProperty("name", item.name);
             object.addProperty("appearance", item.appearance); object.addProperty("custom_model", item.customModel);
             object.addProperty("max_count", item.maxCount); object.addProperty("fireproof", item.fireproof);
-            JsonArray fields = new JsonArray();
-            for (Field field : item.fields) {
-                JsonObject f = new JsonObject(); f.addProperty("id", field.id);
-                f.addProperty("default", decimal(field.value)); f.addProperty("min", decimal(field.min)); f.addProperty("max", decimal(field.max));
-                fields.add(f);
-            }
-            object.add("fields", fields); definitions.add(object);
+            definitions.add(object);
         }
         JsonObject config = new JsonObject(); config.addProperty("version", 1); config.add("items", definitions);
         String configJson = JSON.toJson(config);
@@ -138,7 +127,7 @@ public final class ItemProject {
                     + "2. Copy resourcepacks/item-content into each client's resourcepacks and enable it.\n"
                     + "3. Install item-content-fabric and Fabric API for Minecraft 1.20.1.\n"
                     + "4. Restart client and server. Give: /give @s itemcontent:<item_id>\n"
-                    + "The item-parameters mod is optional: it supplies individual stats and production recipes.\n", StandardCharsets.UTF_8);
+                    + "Item Content works independently. No other content or parameter mod is required.\n", StandardCharsets.UTF_8);
             if (Files.exists(path)) Files.delete(path);
             move(staged, path, false);
         } finally {

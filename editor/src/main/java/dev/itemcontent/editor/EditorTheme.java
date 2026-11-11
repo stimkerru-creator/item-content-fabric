@@ -26,13 +26,6 @@ final class EditorTheme {
         UIManager.put("Component.accentColor", ACCENT);
         UIManager.put("Button.margin", new Insets(9, 16, 9, 16));
         UIManager.put("TextField.margin", new Insets(8, 10, 8, 10));
-        UIManager.put("TabbedPane.tabHeight", 42);
-        UIManager.put("TabbedPane.selectedBackground", Color.WHITE);
-        UIManager.put("TabbedPane.underlineColor", ACCENT);
-        UIManager.put("Table.rowHeight", 36);
-        UIManager.put("TableHeader.height", 36);
-        UIManager.put("Table.showHorizontalLines", true);
-        UIManager.put("Table.gridColor", LINE);
         UIManager.put("ScrollBar.width", 10);
         UIManager.put("ScrollBar.showButtons", false);
         UIManager.put("Panel.background", Color.WHITE);

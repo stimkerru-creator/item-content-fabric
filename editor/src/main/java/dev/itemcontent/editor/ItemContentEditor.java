@@ -5,7 +5,6 @@ import javax.swing.*;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
-import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.image.BufferedImage;
@@ -70,9 +69,7 @@ public final class ItemContentEditor {
         private final JLabel selectionTitle = label("", 23, true, INK);
         private final JLabel selectionId = label("", 12, false, MUTED);
         private final JButton choosePng = new JButton("Выбрать картинку…");
-        private JButton removeButton, duplicateButton, addFieldButton, removeFieldButton;
-        private final DefaultTableModel fields = new DefaultTableModel(new String[]{"ID параметра", "Начальное значение", "Минимум", "Максимум"}, 0);
-        private final JTable table = new JTable(fields);
+        private JButton removeButton, duplicateButton;
         private boolean refreshing, dirty;
         private Path document;
         private String selectedTexture = "";
@@ -135,8 +132,7 @@ public final class ItemContentEditor {
             duplicateButton = button(actions, "Дублировать", "duplicateItem", this::duplicateItem); quiet(duplicateButton);
             removeButton = button(actions, "Удалить", "removeItem", this::removeItem); quiet(removeButton);
             heading.add(actions, BorderLayout.EAST); inspector.add(heading, BorderLayout.NORTH);
-            JTabbedPane tabs = new JTabbedPane(); tabs.setName("itemTabs"); tabs.addTab("Предмет", appearanceCard()); tabs.addTab("Характеристики", parametersCard());
-            inspector.add(tabs, BorderLayout.CENTER); return inspector;
+            inspector.add(appearanceCard(), BorderLayout.CENTER); return inspector;
         }
         private JComponent appearanceCard() {
             preview.setName("itemPreview");
@@ -149,26 +145,15 @@ public final class ItemContentEditor {
             JPanel form = panel(new GridBagLayout());
             name.setName("itemName"); id.setName("itemId"); appearance.setName("appearance");
             field(form, 0, "Название в игре", name, null);
-            name.setToolTipText("Это название увидит игрок. Его можно менять отдельно от ID.");
             JPanel address = panel(new BorderLayout(8, 0)); address.add(label("itemcontent:", 13, false, MUTED), BorderLayout.WEST); address.add(id, BorderLayout.CENTER);
             field(form, 1, "ID предмета", address, "Строчные a–z, цифры и _. Например: steel_plate");
-            JPanel properties = panel(new BorderLayout(16, 0)); maxCount.setPreferredSize(new Dimension(92, 36)); properties.add(maxCount, BorderLayout.WEST); properties.add(fireproof, BorderLayout.CENTER);
+            JPanel properties = panel(new BorderLayout(16, 0)); ((JSpinner.DefaultEditor) maxCount.getEditor()).getTextField().setColumns(3); properties.add(maxCount, BorderLayout.WEST); properties.add(fireproof, BorderLayout.CENTER);
             field(form, 2, "Предметов в одном стаке", properties, null);
             field(form, 3, "Модель существующего предмета", appearance, null);
             appearance.setToolTipText("Например minecraft:iron_ingot. Для своей PNG это поле не используется.");
             GridBagConstraints c = new GridBagConstraints(); c.gridx = 0; c.gridy = 0; c.anchor = GridBagConstraints.NORTH; c.fill = GridBagConstraints.BOTH; c.weighty = 1; content.add(art, c);
             c.gridx = 1; c.weightx = 1; c.insets = new Insets(0, 24, 0, 0); c.fill = GridBagConstraints.HORIZONTAL; content.add(form, c);
             JScrollPane scroll = new JScrollPane(content); scroll.setBorder(BorderFactory.createEmptyBorder()); scroll.getVerticalScrollBar().setUnitIncrement(18); scroll.setName("itemDetailsScroll"); return scroll;
-        }
-        private JPanel parametersCard() {
-            JPanel panel = new JPanel(new BorderLayout(0, 16)); panel.setBorder(padding(20, 20, 20, 20));
-            panel.add(label("<html>Начальные числа предмета для Item Parameters.<br>Можно оставить пустыми и настроить их в первом редакторе.</html>", 13, false, MUTED), BorderLayout.NORTH);
-            table.setName("parameters"); table.setRowHeight(36); table.setFillsViewportHeight(true); table.putClientProperty("terminateEditOnFocusLost", true);
-            JScrollPane scroll = new JScrollPane(table); scroll.setBorder(BorderFactory.createLineBorder(LINE)); panel.add(scroll, BorderLayout.CENTER);
-            JPanel actions = panel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-            addFieldButton = button(actions, "+ Добавить характеристику", "addField", () -> { if (current != null) { stopTable(); fields.addRow(new Object[]{nextFieldId(), "0", "-21474836.48", "21474836.47"}); } });
-            removeFieldButton = button(actions, "Удалить строку", "removeField", () -> { int row = table.getSelectedRow(); if (row >= 0) { stopTable(); fields.removeRow(row); } }); quiet(removeFieldButton);
-            panel.add(actions, BorderLayout.SOUTH); return panel;
         }
         private void bindChanges() {
             list.addListSelectionListener(e -> {
@@ -191,7 +176,6 @@ public final class ItemContentEditor {
             ((JSpinner.DefaultEditor) maxCount.getEditor()).getTextField().getDocument().addDocumentListener(listener(this::changed));
             maxCount.addChangeListener(e -> changed()); fireproof.addActionListener(e -> changed());
             custom.addActionListener(e -> { changed(); updateImage(); }); existing.addActionListener(e -> { changed(); updateImage(); });
-            fields.addTableModelListener(e -> changed());
             search.getDocument().addDocumentListener(listener(() -> { if (!refreshing) guarded(() -> { commit(); refreshList(current); }); }));
             choosePng.addActionListener(e -> guarded(() -> {
                 JFileChooser chooser = chooser("Выберите картинку предмета", false); chooser.setFileFilter(new FileNameExtensionFilter("PNG-картинка", "png"));
@@ -223,9 +207,6 @@ public final class ItemContentEditor {
             entry.id = base + "_" + suffix; entry.name = current.name + " — копия";
             entry.appearance = current.appearance; entry.texture = current.texture; entry.customModel = current.customModel;
             entry.maxCount = current.maxCount; entry.fireproof = current.fireproof;
-            for (var source : current.fields) {
-                var field = new ItemProject.Field(); field.id = source.id; field.value = source.value; field.min = source.min; field.max = source.max; entry.fields.add(field);
-            }
             project.items.add(entry); refreshing = true; search.setText(""); refreshing = false;
             refreshList(entry); changed(); name.requestFocusInWindow(); name.selectAll();
         }
@@ -248,7 +229,8 @@ public final class ItemContentEditor {
         }
         private void field(JPanel parent, int row, String title, JComponent input, String hint) {
             JPanel group = panel(new BorderLayout(0, 7)); group.add(label(title, 13, true, INK), BorderLayout.NORTH);
-            input.setPreferredSize(new Dimension(320, 36)); group.add(input, BorderLayout.CENTER);
+            if (input instanceof JTextField text) text.setColumns(20);
+            group.add(input, BorderLayout.CENTER);
             if (hint != null) group.add(label("<html>" + hint + "</html>", 11, false, MUTED), BorderLayout.SOUTH);
             GridBagConstraints c = new GridBagConstraints(); c.gridx = 0; c.gridy = row; c.weightx = 1; c.fill = GridBagConstraints.HORIZONTAL;
             c.anchor = GridBagConstraints.NORTHWEST; c.insets = new Insets(0, 0, row == 3 ? 0 : 12, 0); parent.add(group, c);
@@ -293,42 +275,26 @@ public final class ItemContentEditor {
             if (!listModel.isEmpty()) list.setSelectedIndex(Math.min(index, listModel.size() - 1)); else showCurrent();
             dirty = true; updateSaveState();
         }
-        private String nextFieldId() {
-            java.util.Set<String> ids = new java.util.HashSet<>();
-            for (int row = 0; row < fields.getRowCount(); row++) ids.add(cell(row, 0));
-            int next = 1;
-            while (ids.contains("itemcontent:parameter_" + next)) next++;
-            return "itemcontent:parameter_" + next;
-        }
-        private void stopTable() { if (table.isEditing()) table.getCellEditor().stopCellEditing(); }
         private void commit() {
             if (refreshing || current == null) return;
-            stopTable();
             try { maxCount.commitEdit(); } catch (java.text.ParseException e) { throw new IllegalArgumentException("Введите целое количество предметов в стаке."); }
             current.name = name.getText().trim(); current.id = "itemcontent:" + id.getText().trim();
             current.appearance = appearance.getText().trim(); current.maxCount = ((Number) maxCount.getValue()).intValue();
             current.customModel = custom.isSelected(); current.fireproof = fireproof.isSelected(); current.texture = selectedTexture;
-            current.fields.clear();
-            for (int row = 0; row < fields.getRowCount(); row++) {
-                ItemProject.Field f = new ItemProject.Field();
-                f.id = cell(row, 0); f.value = cell(row, 1); f.min = cell(row, 2); f.max = cell(row, 3); current.fields.add(f);
-            }
             list.repaint();
         }
-        private String cell(int row, int column) { Object value = fields.getValueAt(row, column); return value == null ? "" : value.toString().trim(); }
         private void showCurrent() {
             refreshing = true;
             boolean enabled = current != null;
-            for (JComponent component : new JComponent[]{name, id, appearance, maxCount, custom, existing, fireproof, choosePng, table}) component.setEnabled(enabled);
+            for (JComponent component : new JComponent[]{name, id, appearance, maxCount, custom, existing, fireproof, choosePng}) component.setEnabled(enabled);
             name.setText(enabled ? current.name : ""); id.setText(enabled ? current.id.substring("itemcontent:".length()) : "");
             appearance.setText(enabled ? current.appearance : "minecraft:iron_ingot"); maxCount.setValue(enabled ? current.maxCount : 64);
             custom.setSelected(enabled && current.customModel); existing.setSelected(!enabled || !current.customModel);
             fireproof.setSelected(enabled && current.fireproof);
-            selectedTexture = enabled ? current.texture : ""; fields.setRowCount(0);
-            if (enabled) for (var field : current.fields) fields.addRow(new Object[]{field.id, field.value, field.min, field.max});
+            selectedTexture = enabled ? current.texture : "";
             selectionTitle.setText(enabled ? current.name : search.getText().isBlank() ? "Создайте первый предмет" : "Ничего не найдено");
             selectionId.setText(enabled ? current.id : "Измените поиск или нажмите «Создать предмет»");
-            removeButton.setEnabled(enabled); duplicateButton.setEnabled(enabled); addFieldButton.setEnabled(enabled); removeFieldButton.setEnabled(enabled);
+            removeButton.setEnabled(enabled); duplicateButton.setEnabled(enabled);
             updateImage(); refreshing = false; updateSaveState();
         }
         private void updateImage() {
@@ -358,7 +324,8 @@ public final class ItemContentEditor {
                     if (!path.getFileName().toString().endsWith(".icproject")) path = path.resolveSibling(path.getFileName() + ".icproject");
                     if (Files.exists(path) && JOptionPane.showConfirmDialog(this, "Заменить этот список предметов?", "Сохранение", JOptionPane.YES_NO_OPTION) != JOptionPane.YES_OPTION) return false;
                 }
-                project.save(path); document = path; dirty = false; status.setText("Список сохранён: " + path.getFileName()); status.setToolTipText(path.toString()); updateSaveState(); return true;
+                project.save(path); document = path; dirty = false; status.setText(project.legacyBackup() == null ? "Список сохранён: " + path.getFileName() : "Сохранено. Прежние данные сохранены в резервной копии.");
+                status.setToolTipText(project.legacyBackup() == null ? path.toString() : project.legacyBackup().toString()); updateSaveState(); return true;
             } catch (Exception e) { error(e); return false; }
         }
         private void open() {
@@ -373,7 +340,7 @@ public final class ItemContentEditor {
             ItemProject loaded = ItemProject.load(path);
             refreshing = true; project = loaded; current = null; search.setText(""); refreshing = false;
             refreshList(project.items.get(0));
-            document = path; dirty = false; status.setText("Открыт список: " + path.getFileName()); status.setToolTipText(path.toString()); updateSaveState();
+            document = path; dirty = false; status.setText(loaded.hasLegacyData() ? "Старые характеристики не используются. При сохранении будет создана резервная копия." : "Открыт список: " + path.getFileName()); status.setToolTipText(path.toString()); updateSaveState();
         }
         private void export() {
             guarded(() -> {
@@ -387,7 +354,7 @@ public final class ItemContentEditor {
                         + "3. Перезапустите сервер и клиент.\n"
                         + "Предметы появятся во вкладке «Ингредиенты».\n\n"
                         + "«Сохранить» сохраняет список для дальнейшего редактирования.\n"
-                        + "Рецепты настраиваются отдельно в Item Parameters.", "Предметы готовы к установке", JOptionPane.INFORMATION_MESSAGE);
+                        + "Item Content работает самостоятельно.", "Предметы готовы к установке", JOptionPane.INFORMATION_MESSAGE);
             });
         }
         boolean mayDiscard() {
@@ -402,8 +369,6 @@ public final class ItemContentEditor {
                     + "4. «Подготовить для игры» создаёт настройки и картинки для Minecraft.\n\n"
                     + "Список предметов — ваши сохранённые настройки. Новый мод при этом не создаётся.\n"
                     + "Один мод Item Content загружает все подготовленные вами предметы.\n\n"
-                    + "«Характеристики» — необязательные числа для Item Parameters.\n"
-                    + "Формулы и рецепты настраиваются в его отдельном редакторе.\n"
                     + "Подробная инструкция: docs/editor.md.", "Как создать предмет", JOptionPane.INFORMATION_MESSAGE);
         }
         private JFileChooser chooser(String title, boolean directories) {

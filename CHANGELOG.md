@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.1
+
+- Remove custom numeric characteristics from item definitions, the editor and exports.
+- Stop reading or generating Item Parameters catalogs; both mods remain independently usable.
+- Read legacy documents without interpreting stats; back up the complete original before saving.
+- Fix clipped text by letting FlatLaf calculate input heights from font metrics and insets.
+- Document the item-only scope and migration of old files without deleting game data.
+
 ## 1.1.0
 
 - Replace the legacy desktop layout with an item-first FlatLaf editor.

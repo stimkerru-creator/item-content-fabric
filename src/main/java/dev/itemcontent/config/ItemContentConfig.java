@@ -51,23 +51,15 @@ public final class ItemContentConfig {
                 Identifier id = identifier(required(item, "id"));
                 if (!ids.add(id)) throw new IOException("Duplicate ID: " + id);
                 Identifier appearance = new Identifier(item.has("appearance") ? required(item, "appearance") : "minecraft:iron_ingot");
-                List<ItemSpec.FieldSpec> fields = new ArrayList<>();
+                // Legacy exports remain readable; this module does not interpret numeric data.
                 if (item.has("fields")) {
-                    for (JsonElement fieldElement : item.getAsJsonArray("fields")) {
-                        if (fieldElement.isJsonPrimitive() && fieldElement.getAsJsonPrimitive().isString()) {
-                            fields.add(new ItemSpec.FieldSpec(identifier(fieldElement.getAsString()).toString(),
-                                    BigDecimal.ZERO, minimum(), maximum()));
-                        } else {
-                            JsonObject field = fieldElement.getAsJsonObject();
-                            allow(field, "id", "default", "min", "max");
-                            fields.add(new ItemSpec.FieldSpec(identifier(required(field, "id")).toString(),
-                                    number(field, "default", BigDecimal.ZERO),
-                                    number(field, "min", minimum()), number(field, "max", maximum())));
-                        }
-                    }
+                    JsonArray legacy = item.getAsJsonArray("fields");
+                    if (legacy == null) throw new IOException("Legacy fields must be an array");
+                    if (!legacy.isEmpty()) org.slf4j.LoggerFactory.getLogger("itemcontent").warn(
+                            "{}: legacy fields are ignored. Item Content only registers items; the source file is unchanged.", id);
                 }
                 result.add(new ItemSpec(id, required(item, "name"), appearance,
-                        flag(item, "custom_model"), integer(item, "max_count", 64), flag(item, "fireproof"), fields));
+                        flag(item, "custom_model"), integer(item, "max_count", 64), flag(item, "fireproof")));
             }
             return List.copyOf(result);
         } catch (RuntimeException failure) {
@@ -78,8 +70,6 @@ public final class ItemContentConfig {
     private static Identifier identifier(String text) {
         return text.contains(":") ? new Identifier(text) : new Identifier("itemcontent", text);
     }
-    private static BigDecimal minimum() { return BigDecimal.valueOf(Integer.MIN_VALUE, 2); }
-    private static BigDecimal maximum() { return BigDecimal.valueOf(Integer.MAX_VALUE, 2); }
     private static void allow(JsonObject object, String... keys) throws IOException {
         Set<String> allowed = Set.of(keys);
         for (String key : object.keySet()) if (!allowed.contains(key)) throw new IOException("Unknown key: " + key);

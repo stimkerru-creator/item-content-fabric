@@ -13,3 +13,7 @@ editor/build/
 Thumbs.db
 *.log
 hs_err_pid*
+
+# Runtime logs and preserved pre-migration documents
+logs/
+*.before-item-only-*.bak
