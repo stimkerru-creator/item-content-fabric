@@ -1,11 +1,17 @@
 package dev.itemcontent.editor;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.io.TempDir;
+import java.nio.file.Path;
 import javax.swing.*;
 import java.awt.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class EditorPanelTest {
+    @TempDir Path temp;
+    @BeforeAll static void theme() throws Exception { SwingUtilities.invokeAndWait(EditorTheme::setup); }
+
     @Test void addingAndSwitchingItemsPreservesIndependentValues() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             var panel = new ItemContentEditor.EditorPanel();
@@ -44,6 +50,105 @@ class EditorPanelTest {
             list.setSelectedIndex(0);
             assertEquals("12,34", table.getValueAt(0, 1));
         });
+    }
+
+    @Test void searchCommitsEditsAndRestoresTheCorrectItem() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            var panel = new ItemContentEditor.EditorPanel();
+            var name = (JTextField) find(panel, "itemName");
+            var search = (JTextField) find(panel, "searchItems");
+            var list = (JList<?>) find(panel, "items");
+            var table = (JTable) find(panel, "parameters");
+            name.setText("Пластина"); ((JButton) find(panel, "addField")).doClick();
+            table.setValueAt("1,25", 0, 1);
+            ((JButton) find(panel, "addItem")).doClick(); name.setText("Шарнир");
+            search.setText("пласт"); assertEquals(1, list.getModel().getSize());
+            assertEquals("Пластина", name.getText()); assertEquals("1,25", table.getValueAt(0, 1));
+            search.setText("несуществующий"); assertEquals(0, list.getModel().getSize());
+            assertFalse(name.isEnabled());
+            search.setText(""); assertEquals(2, list.getModel().getSize());
+            list.setSelectedIndex(1); assertEquals("Шарнир", name.getText());
+        });
+    }
+
+    @Test void duplicateHasIndependentFieldsAndANewId() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            var panel = new ItemContentEditor.EditorPanel();
+            var name = (JTextField) find(panel, "itemName");
+            var id = (JTextField) find(panel, "itemId");
+            var list = (JList<?>) find(panel, "items");
+            var table = (JTable) find(panel, "parameters");
+            name.setText("Пластина"); String originalId = id.getText();
+            ((JButton) find(panel, "addField")).doClick(); table.setValueAt("25", 0, 1);
+            ((JButton) find(panel, "duplicateItem")).doClick();
+            assertEquals(2, list.getModel().getSize()); assertNotEquals(originalId, id.getText());
+            assertEquals("25", table.getValueAt(0, 1)); table.setValueAt("30", 0, 1);
+            list.setSelectedIndex(0); assertEquals("Пластина", name.getText()); assertEquals("25", table.getValueAt(0, 1));
+            list.setSelectedIndex(1); assertEquals("30", table.getValueAt(0, 1));
+        });
+    }
+
+    @Test void saveShortcutUpdatesTheOpenedListWithoutDroppingOtherItems() throws Exception {
+        var project = new ItemProject(); project.items.add(new ItemProject.Entry());
+        var second = new ItemProject.Entry(); second.id = "itemcontent:second"; second.name = "Шарнир"; project.items.add(second);
+        Path file = temp.resolve("catalog.icproject"); project.save(file);
+        SwingUtilities.invokeAndWait(() -> {
+            try {
+                var panel = new ItemContentEditor.EditorPanel(); panel.openList(file);
+                ((JTextField) find(panel, "itemName")).setText("Стальная пластина");
+                ((JButton) find(panel, "addField")).doClick();
+                ((JTable) find(panel, "parameters")).setValueAt("1,25", 0, 1);
+                panel.getActionMap().get("saveList").actionPerformed(new java.awt.event.ActionEvent(panel, 0, "save"));
+            } catch (Exception failure) { throw new RuntimeException(failure); }
+        });
+        var loaded = ItemProject.load(file);
+        assertEquals(2, loaded.items.size()); assertEquals("Стальная пластина", loaded.items.get(0).name);
+        assertEquals("1,25", loaded.items.get(0).fields.get(0).value); assertEquals("Шарнир", loaded.items.get(1).name);
+    }
+
+    @Test void initialWindowFitsTheAvailableSmallDesktop() {
+        Dimension size = ItemContentEditor.windowSize(new Rectangle(0, 0, 1366, 728));
+        assertTrue(size.width < 1366); assertTrue(size.height < 728);
+        assertTrue(size.width >= 980); assertTrue(size.height >= 580);
+    }
+
+    @Test void mainActionsStayInsideTheWindowAtCompactSizes() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            for (Dimension size : new Dimension[]{new Dimension(1264, 641), new Dimension(964, 581)}) {
+                var panel = new ItemContentEditor.EditorPanel(); panel.setSize(size); layout(panel);
+                for (String action : new String[]{"addItem", "saveProject", "export", "fileMenu"}) {
+                    Component component = find(panel, action);
+                    Rectangle bounds = SwingUtilities.convertRectangle(component.getParent(), component.getBounds(), panel);
+                    assertTrue(new Rectangle(size).contains(bounds), action + " clipped at " + size);
+                    assertTrue(bounds.width > 40 && bounds.height > 20, action);
+                }
+            }
+        });
+    }
+    @Test void openingASavedPngItemShowsItsImageWithCorrectProportions() throws Exception {
+        var image = new java.awt.image.BufferedImage(64, 32, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        var graphics = image.createGraphics(); graphics.setColor(Color.RED); graphics.fillRect(0, 0, 64, 16);
+        graphics.setColor(Color.BLUE); graphics.fillRect(0, 16, 64, 16); graphics.dispose();
+        Path texture = temp.resolve("texture.png"); javax.imageio.ImageIO.write(image, "png", texture.toFile());
+        var project = new ItemProject(); var item = new ItemProject.Entry(); item.customModel = true; item.texture = texture.toString(); project.items.add(item);
+        Path file = temp.resolve("png.icproject"); project.save(file);
+        SwingUtilities.invokeAndWait(() -> {
+            try {
+                var panel = new ItemContentEditor.EditorPanel(); panel.openList(file);
+                var preview = (JComponent) find(panel, "itemPreview"); preview.setSize(230, 230);
+                var rendered = new java.awt.image.BufferedImage(230, 230, java.awt.image.BufferedImage.TYPE_INT_RGB);
+                var output = rendered.createGraphics(); preview.paint(output); output.dispose();
+                assertEquals(Color.RED.getRGB(), rendered.getRGB(115, 90));
+                assertEquals(Color.BLUE.getRGB(), rendered.getRGB(115, 140));
+                assertNotEquals(Color.RED.getRGB(), rendered.getRGB(115, 30));
+                assertFalse(((JTextField) find(panel, "appearance")).isEnabled());
+            } catch (Exception failure) { throw new RuntimeException(failure); }
+        });
+    }
+
+    private void layout(Container parent) {
+        parent.doLayout();
+        for (Component child : parent.getComponents()) if (child instanceof Container container) layout(container);
     }
 
     private Component find(Container parent, String name) {

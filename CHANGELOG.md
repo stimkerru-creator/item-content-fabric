@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.0
+
+- Replace the legacy desktop layout with an item-first FlatLaf editor.
+- Make item creation the primary action; move catalog file operations to File.
+- Add name/ID search, independent duplication, save shortcuts and a larger PNG preview.
+- Fit the initial window to the available desktop; keep primary actions visible at compact sizes.
+- Preserve existing item/project formats and Minecraft runtime behavior.
+- Bundle FlatLaf and its Apache 2.0 license only in the editor.
+
+
 ## 1.0.3
 
 - Reject fractional stack limits, invalid property types, duplicate parameter IDs and misspelled field keys before registration.

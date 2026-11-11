@@ -19,3 +19,9 @@ is included in the editor at META-INF/licenses/Apache-2.0.txt.
 
 Minecraft is a runtime dependency resolved by Fabric Loom and is not redistributed
 by this repository. The project source is MIT-licensed.
+
+com.formdev:flatlaf:3.7.2 (bundled only in the standalone editor)
+Copyright FormDev Software GmbH and FlatLaf contributors. Apache License 2.0.
+https://github.com/JFormDesigner/FlatLaf/blob/3.7.2/LICENSE
+The complete license is included at META-INF/licenses/FlatLaf-LICENSE.txt.
+FlatLaf is not included in the Minecraft mod.

@@ -1,5 +1,25 @@
 # Validation record
 
+## 1.1.0 — 2026-11-12
+
+- Standalone editor: `gradlew.bat -p editor build --offline --no-daemon` passed.
+- Fabric runtime: `gradlew.bat build --offline --no-daemon` passed.
+- **33 tests passed**: 12 runtime/export checks, 12 project-model checks, 9 editor workflow checks.
+- New workflow coverage: filtered selection preserves edits; duplicates have independent fields and a new ID;
+  Ctrl+S saves the opened list without dropping other items; reopened PNG appears at the right proportions;
+  the initial window fits a 1366×728 usable desktop; main actions remain visible at compact sizes.
+- The desktop was rendered and inspected at 1280×680 and 980×620 window sizes.
+- The final editor was launched on the user's desktop. Its actual Windows window was captured
+  at 1280×680 (position 43,24), wholly inside the 1366×728 usable area.
+  The normal 1280×680 window shows all primary properties without vertical scrolling;
+  the smaller window retains scrolling for its inspector and keeps primary actions visible.
+- FlatLaf 3.7.2 and its full Apache 2.0 license are included only in the editor.
+- Existing `.icproject` version 1 and game JSON version 1 are unchanged.
+- Minecraft item behavior and registration are unchanged; this release updates the editor and version metadata.
+  This does not add a new manual in-game PNG acceptance test or a third-party-modpack test.
+
+The legacy checks below record earlier releases separately.
+
 ## 1.0.3 — 2026-11-10
 
 Local checks used JDK 21 with `--release 17` for both compilation targets.

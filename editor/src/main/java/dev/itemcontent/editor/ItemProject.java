@@ -73,18 +73,18 @@ public final class ItemProject {
         JsonObject root = new JsonObject(); root.addProperty("editorVersion", 1);
         root.add("items", JSON.toJsonTree(items));
         String text = JSON.toJson(root);
-        if (text.getBytes(StandardCharsets.UTF_8).length > MAX_BYTES) throw new IOException("Проект больше 4 МиБ.");
+        if (text.getBytes(StandardCharsets.UTF_8).length > MAX_BYTES) throw new IOException("Список предметов больше 4 МиБ.");
         writeAtomic(file.toAbsolutePath(), text);
     }
     public static ItemProject load(Path file) throws IOException {
-        if (Files.size(file) > MAX_BYTES) throw new IOException("Проект больше 4 МиБ.");
+        if (Files.size(file) > MAX_BYTES) throw new IOException("Список предметов больше 4 МиБ.");
         try {
             JsonObject root = JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8)).getAsJsonObject();
-            if (root.get("editorVersion").getAsBigDecimal().intValueExact() != 1) throw new IOException("Эта версия проекта не поддерживается.");
+            if (root.get("editorVersion").getAsBigDecimal().intValueExact() != 1) throw new IOException("Эта версия списка предметов не поддерживается.");
             Entry[] entries = JSON.fromJson(root.get("items"), Entry[].class);
             ItemProject result = new ItemProject(); result.items.addAll(Arrays.asList(entries)); result.validate();
             return result;
-        } catch (RuntimeException e) { throw new IOException("Не удалось открыть проект: " + e.getMessage(), e); }
+        } catch (RuntimeException e) { throw new IOException("Не удалось открыть список предметов: " + e.getMessage(), e); }
     }
     /** Exports to a new/empty folder without overwriting user files. */
     public void export(Path target) throws IOException {

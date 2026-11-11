@@ -13,11 +13,13 @@ with ZipFile(mod) as jar:
     metadata = json.loads(jar.read("fabric.mod.json"))
     assert metadata["version"] == VERSION, "Wrong mod version"
     assert "LICENSE-item-content.txt" in jar.namelist(), "Missing mod license"
-    assert not any(name.startswith("dev/itemcontent/editor/") for name in jar.namelist()), "Editor leaked into mod"
+    assert not any(name.startswith(("dev/itemcontent/editor/", "com/formdev/")) for name in jar.namelist()), "Editor or FlatLaf leaked into mod"
     assert int.from_bytes(jar.read("dev/itemcontent/ItemContentMod.class")[6:8], "big") == 61
 with ZipFile(editor) as jar:
     assert "dev/itemcontent/editor/ItemContentEditor.class" in jar.namelist()
     assert "com/google/gson/Gson.class" in jar.namelist(), "Editor dependency is missing"
+    assert "com/formdev/flatlaf/FlatLightLaf.class" in jar.namelist(), "Desktop theme dependency is missing"
+    assert "META-INF/licenses/FlatLaf-LICENSE.txt" in jar.namelist(), "Missing FlatLaf license"
     assert "META-INF/licenses/Apache-2.0.txt" in jar.namelist(), "Missing Gson license"
     assert int.from_bytes(jar.read("dev/itemcontent/editor/ItemContentEditor.class")[6:8], "big") == 61
     assert not any(name.startswith(("net/minecraft/", "net/fabricmc/", "dev/itemparams/")) for name in jar.namelist())

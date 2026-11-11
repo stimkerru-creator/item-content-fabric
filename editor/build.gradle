@@ -6,6 +6,7 @@ version = release.getProperty('version')
 repositories { mavenCentral() }
 dependencies {
     implementation 'com.google.code.gson:gson:2.10.1'
+    implementation 'com.formdev:flatlaf:3.7.2'
     testImplementation 'org.junit.jupiter:junit-jupiter:5.11.3'
 }
 application { mainClass = 'dev.itemcontent.editor.ItemContentEditor' }
@@ -18,6 +19,7 @@ tasks.named('jar') {
     from { configurations.runtimeClasspath.collect { zipTree(it) } }
     from('../LICENSE') { into 'META-INF'; rename { 'LICENSE-item-content.txt' } }
     from('../THIRD-PARTY-NOTICES.txt') { into 'META-INF' }
+    from('licenses/flatlaf-LICENSE.txt') { into 'META-INF/licenses'; rename { 'FlatLaf-LICENSE.txt' } }
     from('licenses/gson-LICENSE.txt') { into 'META-INF/licenses'; rename { 'Apache-2.0.txt' } }
     exclude 'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA', 'module-info.class'
 }

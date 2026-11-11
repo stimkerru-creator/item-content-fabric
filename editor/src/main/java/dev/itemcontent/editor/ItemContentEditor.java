@@ -10,27 +10,36 @@ import java.awt.*;
 import java.awt.event.*;
 import java.awt.image.BufferedImage;
 import java.nio.file.*;
+import java.util.Locale;
+import static dev.itemcontent.editor.EditorTheme.*;
 
-/** Separate desktop app for the item-content repository. Recipes belong to item-parameters. */
+/** Item-first editor. Persistence and runtime formats remain in ItemProject. */
 public final class ItemContentEditor {
-    public static void main(String[] args) throws Exception {
-        UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-        UIManager.put("Label.font", new Font("Dialog", Font.PLAIN, 14));
-        UIManager.put("Button.font", new Font("Dialog", Font.PLAIN, 14));
-        UIManager.put("TextField.font", new Font("Dialog", Font.PLAIN, 14));
+    public static void main(String[] args) {
+        EditorTheme.setup();
         SwingUtilities.invokeLater(() -> {
             EditorPanel panel = new EditorPanel();
-            JFrame frame = new JFrame("Item Content — конструктор предметов");
+            JFrame frame = new JFrame("Item Content — редактор предметов");
+            frame.setIconImage(EditorTheme.windowIcon());
             frame.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
-            frame.setContentPane(panel); frame.setMinimumSize(new Dimension(980, 650));
-            frame.setSize(1180, 780); frame.setLocationRelativeTo(null);
+            Rectangle available = GraphicsEnvironment.getLocalGraphicsEnvironment().getMaximumWindowBounds();
+            frame.setContentPane(panel);
+            frame.setMinimumSize(new Dimension(Math.min(980, available.width), Math.min(580, available.height)));
+            frame.setSize(windowSize(available)); frame.setLocationRelativeTo(null);
             frame.addWindowListener(new WindowAdapter() {
                 @Override public void windowClosing(WindowEvent e) { if (panel.mayDiscard()) frame.dispose(); }
             });
             frame.setVisible(true);
-            if (args.length == 2 && args[0].equals("--screenshot")) {
+            for (int index = 0; index + 1 < args.length; index++) {
+                if (args[index].equals("--open")) {
+                    Path file = Path.of(args[index + 1]); panel.guarded(() -> panel.openList(file));
+                }
+            }
+            if (args.length >= 2 && args[0].equals("--screenshot")) {
+                if (args.length >= 4 && args[2].matches("[0-9]+") && args[3].matches("[0-9]+")) frame.setSize(Integer.parseInt(args[2]), Integer.parseInt(args[3]));
                 SwingUtilities.invokeLater(() -> {
                     try {
+                        frame.validate();
                         BufferedImage image = new BufferedImage(panel.getWidth(), panel.getHeight(), BufferedImage.TYPE_INT_RGB);
                         Graphics2D graphics = image.createGraphics(); panel.printAll(graphics); graphics.dispose();
                         ImageIO.write(image, "png", Path.of(args[1]).toFile());
@@ -40,19 +49,28 @@ public final class ItemContentEditor {
             }
         });
     }
+    static Dimension windowSize(Rectangle available) {
+        return new Dimension(Math.min(1280, Math.max(1, available.width - 48)), Math.min(820, Math.max(1, available.height - 48)));
+    }
 
     static final class EditorPanel extends JPanel {
         private ItemProject project = new ItemProject();
         private ItemProject.Entry current;
         private final DefaultListModel<ItemProject.Entry> listModel = new DefaultListModel<>();
         private final JList<ItemProject.Entry> list = new JList<>(listModel);
-        private final JTextField name = new JTextField(), id = new JTextField(), appearance = new JTextField();
-        private final JCheckBox custom = new JCheckBox("Своя картинка PNG"), fireproof = new JCheckBox("Не сгорает в огне и лаве");
+        private final JTextField name = new JTextField(), id = new JTextField(), appearance = new JTextField(), search = new JTextField();
+        private final JRadioButton custom = new JRadioButton("Своя PNG"), existing = new JRadioButton("Модель", true);
+        private final JCheckBox fireproof = new JCheckBox("Не сгорает в огне и лаве");
         private final JSpinner maxCount = new JSpinner(new SpinnerNumberModel(64, 1, 99, 1));
-        private final JLabel preview = new JLabel("PNG не выбрана", SwingConstants.CENTER);
-        private final JLabel texturePath = new JLabel("Используется готовая модель Minecraft.");
-        private final JLabel status = new JLabel("Добавьте предмет, задайте название и изображение, затем экспортируйте.");
-        private final JButton choosePng = new JButton("Выбрать PNG…");
+        private final ImagePreview preview = new ImagePreview();
+        private final JLabel texturePath = label("", 12, false, MUTED);
+        private final JLabel status = label("Готово к созданию предметов", 12, false, MUTED);
+        private final JLabel saveState = label("Не сохранено", 12, false, MUTED);
+        private final JLabel itemCount = label("", 12, false, MUTED);
+        private final JLabel selectionTitle = label("", 23, true, INK);
+        private final JLabel selectionId = label("", 12, false, MUTED);
+        private final JButton choosePng = new JButton("Выбрать картинку…");
+        private JButton removeButton, duplicateButton, addFieldButton, removeFieldButton;
         private final DefaultTableModel fields = new DefaultTableModel(new String[]{"ID параметра", "Начальное значение", "Минимум", "Максимум"}, 0);
         private final JTable table = new JTable(fields);
         private boolean refreshing, dirty;
@@ -60,101 +78,199 @@ public final class ItemContentEditor {
         private String selectedTexture = "";
 
         EditorPanel() {
-            super(new BorderLayout(12, 12)); setBorder(BorderFactory.createEmptyBorder(16, 16, 12, 16));
-            JPanel top = new JPanel(new BorderLayout(0, 10));
-            JLabel title = new JLabel("Конструктор новых предметов"); title.setFont(title.getFont().deriveFont(Font.BOLD, 23));
-            top.add(title, BorderLayout.NORTH);
-            JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-            button(toolbar, "Новый проект", "newProject", () -> { if (mayDiscard()) reset(); });
-            button(toolbar, "Открыть…", "openProject", this::open);
-            button(toolbar, "Сохранить проект…", "saveProject", () -> save());
-            button(toolbar, "Экспорт для Minecraft…", "export", this::export);
-            button(toolbar, "Инструкция", "help", this::help);
-            top.add(toolbar, BorderLayout.CENTER);
-            top.add(new JLabel("1. Добавьте предмет    →    2. Выберите название и внешний вид    →    3. Экспортируйте в игру"), BorderLayout.SOUTH);
-            add(top, BorderLayout.NORTH);
-
-            JPanel left = new JPanel(new BorderLayout(0, 10));
-            left.setBorder(BorderFactory.createTitledBorder("Ваши предметы"));
-            list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION); list.setFixedCellHeight(34); list.setName("items");
-            left.add(new JScrollPane(list), BorderLayout.CENTER);
-            JPanel actions = new JPanel(new FlowLayout(FlowLayout.LEFT));
-            button(actions, "+ Добавить", "addItem", this::addItem);
-            button(actions, "Удалить", "removeItem", this::removeItem);
-            left.add(actions, BorderLayout.SOUTH);
-
-            JPanel details = new JPanel(new BorderLayout(8, 12));
-            JPanel general = new JPanel(new GridBagLayout());
+            super(new BorderLayout()); setBackground(BACKGROUND);
+            add(header(), BorderLayout.NORTH);
+            JPanel body = panel(new BorderLayout(20, 0)); body.setBorder(padding(20, 24, 16, 24));
+            body.add(sidebar(), BorderLayout.WEST); body.add(inspector(), BorderLayout.CENTER); add(body, BorderLayout.CENTER);
+            JPanel footer = panel(new BorderLayout(16, 0)); footer.setBorder(padding(0, 26, 12, 26));
+            footer.add(status, BorderLayout.CENTER); footer.add(saveState, BorderLayout.EAST); add(footer, BorderLayout.SOUTH);
+            bindChanges();
+            shortcut("control N", "newItem", this::addItem);
+            shortcut("control O", "openList", this::open);
+            shortcut("control S", "saveList", () -> save());
+            shortcut("control shift S", "saveListAs", () -> saveAs());
+            shortcut("F1", "help", this::help);
+            reset();
+        }
+        private JPanel header() {
+            JPanel bar = new JPanel(new BorderLayout(20, 0));
+            bar.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, LINE), padding(16, 24, 16, 24)));
+            JPanel brand = panel(new BorderLayout(14, 0));
+            JLabel mark = label("IC", 18, true, Color.WHITE); mark.setOpaque(true); mark.setBackground(ACCENT);
+            mark.setHorizontalAlignment(SwingConstants.CENTER); mark.setPreferredSize(new Dimension(44, 44)); brand.add(mark, BorderLayout.WEST);
+            JPanel words = panel(new GridLayout(2, 1, 0, 1));
+            words.add(label("Предметы", 22, true, INK)); words.add(label("Item Content · Minecraft 1.20.1 / Fabric", 12, false, MUTED));
+            brand.add(words, BorderLayout.CENTER); bar.add(brand, BorderLayout.WEST);
+            JPanel actions = panel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+            JButton file = button(actions, "Файл", "fileMenu", () -> {}); quiet(file);
+            JPopupMenu menu = new JPopupMenu();
+            menu(menu, "Открыть список предметов…", "openProject", this::open);
+            menu(menu, "Сохранить список как…", "saveAs", () -> saveAs()); menu.addSeparator();
+            menu(menu, "Новый список предметов…", "newProject", () -> { if (mayDiscard()) reset(); });
+            menu.addSeparator(); menu(menu, "Как пользоваться", "help", this::help);
+            file.addActionListener(e -> menu.show(file, 0, file.getHeight()));
+            button(actions, "Сохранить", "saveProject", () -> save());
+            JButton prepare = button(actions, "Подготовить для игры…", "export", this::export); primary(prepare);
+            bar.add(actions, BorderLayout.EAST); return bar;
+        }
+        private JPanel sidebar() {
+            JPanel side = new JPanel(new BorderLayout(0, 14)); side.setPreferredSize(new Dimension(254, 300)); side.setBorder(padding(16, 14, 12, 14));
+            JPanel top = panel(new BorderLayout(0, 14));
+            JPanel heading = panel(new BorderLayout()); heading.add(label("Все предметы", 14, true, INK), BorderLayout.WEST);
+            heading.add(itemCount, BorderLayout.EAST); top.add(heading, BorderLayout.NORTH);
+            JButton create = new JButton("+  Создать предмет"); create.setName("addItem"); primary(create);
+            create.addActionListener(e -> guarded(this::addItem)); top.add(create, BorderLayout.CENTER);
+            search.setName("searchItems"); search.putClientProperty("JTextField.placeholderText", "Поиск по названию или ID");
+            top.add(search, BorderLayout.SOUTH); side.add(top, BorderLayout.NORTH);
+            list.setName("items"); list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+            list.setFixedCellHeight(68); list.setFixedCellWidth(216); list.setCellRenderer(new ItemCell());
+            JScrollPane scroll = new JScrollPane(list); scroll.setBorder(BorderFactory.createEmptyBorder()); scroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+            side.add(scroll, BorderLayout.CENTER); side.add(label("Ctrl+N  —  создать предмет", 11, false, MUTED), BorderLayout.SOUTH); return side;
+        }
+        private JPanel inspector() {
+            JPanel inspector = panel(new BorderLayout(0, 14));
+            JPanel heading = panel(new BorderLayout(12, 0));
+            JPanel titles = panel(new GridLayout(2, 1, 0, 2)); titles.add(selectionTitle); titles.add(selectionId); heading.add(titles, BorderLayout.CENTER);
+            JPanel actions = panel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+            duplicateButton = button(actions, "Дублировать", "duplicateItem", this::duplicateItem); quiet(duplicateButton);
+            removeButton = button(actions, "Удалить", "removeItem", this::removeItem); quiet(removeButton);
+            heading.add(actions, BorderLayout.EAST); inspector.add(heading, BorderLayout.NORTH);
+            JTabbedPane tabs = new JTabbedPane(); tabs.setName("itemTabs"); tabs.addTab("Предмет", appearanceCard()); tabs.addTab("Характеристики", parametersCard());
+            inspector.add(tabs, BorderLayout.CENTER); return inspector;
+        }
+        private JComponent appearanceCard() {
+            preview.setName("itemPreview");
+            JPanel content = new JPanel(new GridBagLayout()); content.setBorder(padding(18, 18, 18, 18));
+            JPanel art = panel(new BorderLayout(0, 12)); art.setPreferredSize(new Dimension(230, 298));
+            JPanel modes = panel(new GridLayout(1, 2, 4, 0)); ButtonGroup group = new ButtonGroup(); group.add(existing); group.add(custom);
+            modes.add(existing); modes.add(custom); art.add(modes, BorderLayout.NORTH); art.add(preview, BorderLayout.CENTER);
+            JPanel controls = panel(new BorderLayout(0, 8)); choosePng.setName("choosePng"); controls.add(choosePng, BorderLayout.NORTH);
+            controls.add(texturePath, BorderLayout.CENTER); controls.add(label("PNG с прозрачностью · например 32 × 32", 11, false, MUTED), BorderLayout.SOUTH); art.add(controls, BorderLayout.SOUTH);
+            JPanel form = panel(new GridBagLayout());
             name.setName("itemName"); id.setName("itemId"); appearance.setName("appearance");
-            row(general, 0, "Название в игре", name);
-            row(general, 1, "ID: itemcontent:", id);
-            row(general, 2, "Предметов в стаке", maxCount);
-            row(general, 3, "Свойства", fireproof);
-            row(general, 4, "Изображение", custom);
-            row(general, 5, "Готовая модель (ID)", appearance);
-            JPanel imageTools = new JPanel(new BorderLayout(12, 6));
-            preview.setPreferredSize(new Dimension(148, 148)); preview.setOpaque(true); preview.setBackground(new Color(235, 238, 242));
-            preview.setBorder(BorderFactory.createLineBorder(new Color(200, 205, 215)));
-            JPanel previewHolder = new JPanel(new BorderLayout()); previewHolder.add(preview, BorderLayout.NORTH);
-            imageTools.add(previewHolder, BorderLayout.WEST);
-            JPanel imageActions = new JPanel(); imageActions.setLayout(new BoxLayout(imageActions, BoxLayout.Y_AXIS));
-            choosePng.setAlignmentX(LEFT_ALIGNMENT); imageActions.add(choosePng); imageActions.add(Box.createVerticalStrut(12));
-            texturePath.setAlignmentX(LEFT_ALIGNMENT); imageActions.add(texturePath); imageActions.add(Box.createVerticalStrut(8));
-            JLabel imageHint = new JLabel("<html>PNG, например 16×16, 32×32 или 64×64.<br>Без PNG используется готовая модель из поля выше.</html>");
-            imageHint.setAlignmentX(LEFT_ALIGNMENT); imageActions.add(imageHint); imageTools.add(imageActions, BorderLayout.CENTER);
-            JPanel card = new JPanel(new BorderLayout(12, 16)); card.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
-            card.add(general, BorderLayout.NORTH); card.add(imageTools, BorderLayout.CENTER);
-            card.add(new JLabel("ID: латинские строчные буквы, цифры и _. Например: steel_plate"), BorderLayout.SOUTH);
-
-            JPanel parameterPanel = new JPanel(new BorderLayout(8, 12)); parameterPanel.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
-            parameterPanel.add(new JLabel("<html>Необязательно. Начальные характеристики для мода Item Parameters.<br>Рецепты и формулы настраиваются в отдельном первом проекте.</html>"), BorderLayout.NORTH);
-            table.setRowHeight(28); table.setName("parameters"); parameterPanel.add(new JScrollPane(table), BorderLayout.CENTER);
-            JPanel parameterActions = new JPanel(new FlowLayout(FlowLayout.LEFT));
-            button(parameterActions, "+ Параметр", "addField", () -> { if (current != null) fields.addRow(new Object[]{nextFieldId(), "0", "-21474836.48", "21474836.47"}); });
-            button(parameterActions, "Удалить параметр", "removeField", () -> { int row = table.getSelectedRow(); if (row >= 0) { stopTable(); fields.removeRow(row); } });
-            parameterPanel.add(parameterActions, BorderLayout.SOUTH);
-            JTabbedPane tabs = new JTabbedPane(); tabs.addTab("Предмет и картинка", card); tabs.addTab("Начальные параметры (необязательно)", parameterPanel);
-            details.add(tabs, BorderLayout.CENTER);
-            JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, left, details);
-            split.setResizeWeight(.25); split.setDividerLocation(290); left.setMinimumSize(new Dimension(220, 200)); details.setMinimumSize(new Dimension(600, 300));
-            add(split, BorderLayout.CENTER); add(status, BorderLayout.SOUTH);
-
+            field(form, 0, "Название в игре", name, null);
+            name.setToolTipText("Это название увидит игрок. Его можно менять отдельно от ID.");
+            JPanel address = panel(new BorderLayout(8, 0)); address.add(label("itemcontent:", 13, false, MUTED), BorderLayout.WEST); address.add(id, BorderLayout.CENTER);
+            field(form, 1, "ID предмета", address, "Строчные a–z, цифры и _. Например: steel_plate");
+            JPanel properties = panel(new BorderLayout(16, 0)); maxCount.setPreferredSize(new Dimension(92, 36)); properties.add(maxCount, BorderLayout.WEST); properties.add(fireproof, BorderLayout.CENTER);
+            field(form, 2, "Предметов в одном стаке", properties, null);
+            field(form, 3, "Модель существующего предмета", appearance, null);
+            appearance.setToolTipText("Например minecraft:iron_ingot. Для своей PNG это поле не используется.");
+            GridBagConstraints c = new GridBagConstraints(); c.gridx = 0; c.gridy = 0; c.anchor = GridBagConstraints.NORTH; c.fill = GridBagConstraints.BOTH; c.weighty = 1; content.add(art, c);
+            c.gridx = 1; c.weightx = 1; c.insets = new Insets(0, 24, 0, 0); c.fill = GridBagConstraints.HORIZONTAL; content.add(form, c);
+            JScrollPane scroll = new JScrollPane(content); scroll.setBorder(BorderFactory.createEmptyBorder()); scroll.getVerticalScrollBar().setUnitIncrement(18); scroll.setName("itemDetailsScroll"); return scroll;
+        }
+        private JPanel parametersCard() {
+            JPanel panel = new JPanel(new BorderLayout(0, 16)); panel.setBorder(padding(20, 20, 20, 20));
+            panel.add(label("<html>Начальные числа предмета для Item Parameters.<br>Можно оставить пустыми и настроить их в первом редакторе.</html>", 13, false, MUTED), BorderLayout.NORTH);
+            table.setName("parameters"); table.setRowHeight(36); table.setFillsViewportHeight(true); table.putClientProperty("terminateEditOnFocusLost", true);
+            JScrollPane scroll = new JScrollPane(table); scroll.setBorder(BorderFactory.createLineBorder(LINE)); panel.add(scroll, BorderLayout.CENTER);
+            JPanel actions = panel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+            addFieldButton = button(actions, "+ Добавить характеристику", "addField", () -> { if (current != null) { stopTable(); fields.addRow(new Object[]{nextFieldId(), "0", "-21474836.48", "21474836.47"}); } });
+            removeFieldButton = button(actions, "Удалить строку", "removeField", () -> { int row = table.getSelectedRow(); if (row >= 0) { stopTable(); fields.removeRow(row); } }); quiet(removeFieldButton);
+            panel.add(actions, BorderLayout.SOUTH); return panel;
+        }
+        private void bindChanges() {
             list.addListSelectionListener(e -> {
                 if (e.getValueIsAdjusting() || refreshing) return;
-                try {
-                    commit(); current = list.getSelectedValue(); showCurrent();
-                } catch (IllegalArgumentException failure) {
-                    refreshing = true;
-                    list.setSelectedValue(current, true);
-                    refreshing = false;
-                    status.setText("Сначала исправьте данные текущего предмета: " + failure.getMessage());
+                try { commit(); current = list.getSelectedValue(); showCurrent(); }
+                catch (IllegalArgumentException failure) {
+                    refreshing = true; list.setSelectedValue(current, true); refreshing = false;
+                    status.setText("Исправьте данные текущего предмета: " + failure.getMessage());
                 }
             });
-            DocumentListener listener = new DocumentListener() {
-                public void insertUpdate(DocumentEvent e) { changed(); }
-                public void removeUpdate(DocumentEvent e) { changed(); }
-                public void changedUpdate(DocumentEvent e) { changed(); }
-                private void changed() { if (!refreshing) dirty = true; }
-            };
-            name.getDocument().addDocumentListener(listener); id.getDocument().addDocumentListener(listener); appearance.getDocument().addDocumentListener(listener);
-            maxCount.addChangeListener(e -> { if (!refreshing) dirty = true; });
-            ((JSpinner.DefaultEditor) maxCount.getEditor()).getTextField().getDocument().addDocumentListener(listener);
-            fireproof.addActionListener(e -> dirty = true);
-            custom.addActionListener(e -> { dirty = true; updateImage(); });
-            fields.addTableModelListener(e -> { if (!refreshing) dirty = true; });
+            DocumentListener changes = listener(() -> {
+                if (!refreshing) {
+                    dirty = true;
+                    if (current != null) { current.name = name.getText().trim(); current.id = "itemcontent:" + id.getText().trim(); }
+                    selectionTitle.setText(name.getText().isBlank() ? "Без названия" : name.getText());
+                    selectionId.setText("itemcontent:" + id.getText()); list.repaint(); updateSaveState();
+                }
+            });
+            name.getDocument().addDocumentListener(changes); id.getDocument().addDocumentListener(changes); appearance.getDocument().addDocumentListener(changes);
+            ((JSpinner.DefaultEditor) maxCount.getEditor()).getTextField().getDocument().addDocumentListener(listener(this::changed));
+            maxCount.addChangeListener(e -> changed()); fireproof.addActionListener(e -> changed());
+            custom.addActionListener(e -> { changed(); updateImage(); }); existing.addActionListener(e -> { changed(); updateImage(); });
+            fields.addTableModelListener(e -> changed());
+            search.getDocument().addDocumentListener(listener(() -> { if (!refreshing) guarded(() -> { commit(); refreshList(current); }); }));
             choosePng.addActionListener(e -> guarded(() -> {
-                JFileChooser chooser = chooser("Выберите PNG предмета", false); chooser.setFileFilter(new FileNameExtensionFilter("PNG", "png"));
+                JFileChooser chooser = chooser("Выберите картинку предмета", false); chooser.setFileFilter(new FileNameExtensionFilter("PNG-картинка", "png"));
                 if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
-                ItemProject.validatePng(chooser.getSelectedFile().toPath());
-                selectedTexture = chooser.getSelectedFile().getAbsolutePath(); custom.setSelected(true); dirty = true; updateImage();
+                ItemProject.validatePng(chooser.getSelectedFile().toPath()); selectedTexture = chooser.getSelectedFile().getAbsolutePath();
+                custom.setSelected(true); changed(); updateImage();
             }));
-            reset();
+        }
+        private void changed() { if (!refreshing) { dirty = true; updateSaveState(); } }
+        private void updateSaveState() {
+            itemCount.setText(Integer.toString(project.items.size()));
+            saveState.setText(dirty ? "Есть несохранённые изменения" : document == null ? "Список ещё не сохранён" : "Все изменения сохранены");
+            saveState.setForeground(dirty ? new Color(0x9b691b) : MUTED);
+        }
+        private void refreshList(ItemProject.Entry preferred) {
+            String query = search.getText().trim().toLowerCase(Locale.ROOT);
+            refreshing = true; listModel.clear();
+            for (var entry : project.items)
+                if (query.isEmpty() || entry.name.toLowerCase(Locale.ROOT).contains(query) || entry.id.toLowerCase(Locale.ROOT).contains(query)) listModel.addElement(entry);
+            if (preferred != null && listModel.contains(preferred)) list.setSelectedValue(preferred, true);
+            else if (!listModel.isEmpty()) list.setSelectedIndex(0);
+            current = list.getSelectedValue(); refreshing = false; showCurrent();
+        }
+        private void duplicateItem() {
+            if (current == null) return;
+            commit(); ItemProject.Entry entry = new ItemProject.Entry();
+            int suffix = 2; String base = current.id;
+            while (containsId(base + "_" + suffix)) suffix++;
+            entry.id = base + "_" + suffix; entry.name = current.name + " — копия";
+            entry.appearance = current.appearance; entry.texture = current.texture; entry.customModel = current.customModel;
+            entry.maxCount = current.maxCount; entry.fireproof = current.fireproof;
+            for (var source : current.fields) {
+                var field = new ItemProject.Field(); field.id = source.id; field.value = source.value; field.min = source.min; field.max = source.max; entry.fields.add(field);
+            }
+            project.items.add(entry); refreshing = true; search.setText(""); refreshing = false;
+            refreshList(entry); changed(); name.requestFocusInWindow(); name.selectAll();
+        }
+        private DocumentListener listener(Runnable action) {
+            return new DocumentListener() {
+                public void insertUpdate(DocumentEvent e) { action.run(); }
+                public void removeUpdate(DocumentEvent e) { action.run(); }
+                public void changedUpdate(DocumentEvent e) { action.run(); }
+            };
+        }
+        private JButton button(JPanel parent, String text, String name, CheckedAction action) {
+            JButton button = new JButton(text); button.setName(name); button.addActionListener(e -> guarded(action)); parent.add(button); return button;
+        }
+        private void menu(JPopupMenu parent, String text, String name, CheckedAction action) {
+            JMenuItem item = new JMenuItem(text); item.setName(name); item.addActionListener(e -> guarded(action)); parent.add(item);
+        }
+        private void shortcut(String key, String name, CheckedAction action) {
+            getInputMap(WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(KeyStroke.getKeyStroke(key), name);
+            getActionMap().put(name, new AbstractAction() { public void actionPerformed(ActionEvent e) { guarded(action); } });
+        }
+        private void field(JPanel parent, int row, String title, JComponent input, String hint) {
+            JPanel group = panel(new BorderLayout(0, 7)); group.add(label(title, 13, true, INK), BorderLayout.NORTH);
+            input.setPreferredSize(new Dimension(320, 36)); group.add(input, BorderLayout.CENTER);
+            if (hint != null) group.add(label("<html>" + hint + "</html>", 11, false, MUTED), BorderLayout.SOUTH);
+            GridBagConstraints c = new GridBagConstraints(); c.gridx = 0; c.gridy = row; c.weightx = 1; c.fill = GridBagConstraints.HORIZONTAL;
+            c.anchor = GridBagConstraints.NORTHWEST; c.insets = new Insets(0, 0, row == 3 ? 0 : 12, 0); parent.add(group, c);
+        }
+        private static final class ItemCell extends JPanel implements ListCellRenderer<ItemProject.Entry> {
+            private final JLabel initial = label("", 20, true, ACCENT);
+            private final JLabel title = label("", 14, true, INK), address = label("", 11, false, MUTED);
+            ItemCell() {
+                super(new BorderLayout(10, 0)); setBorder(padding(10, 10, 10, 10)); initial.setPreferredSize(new Dimension(28, 34));
+                add(initial, BorderLayout.WEST); JPanel words = panel(new GridLayout(2, 1, 0, 2)); words.add(title); words.add(address); add(words, BorderLayout.CENTER);
+            }
+            public Component getListCellRendererComponent(JList<? extends ItemProject.Entry> list, ItemProject.Entry item, int index, boolean selected, boolean focused) {
+                title.setText(item.name.isBlank() ? "Без названия" : item.name); address.setText(item.id);
+                initial.setText(item.name.isBlank() ? "?" : item.name.substring(0, 1).toUpperCase(Locale.ROOT));
+                setBackground(selected ? new Color(0xe9f0ff) : Color.WHITE); return this;
+            }
         }
 
         private void reset() {
             project = new ItemProject(); current = null; document = null;
-            refreshing = true; listModel.clear(); refreshing = false;
-            addItem(); dirty = false;
+            refreshing = true; listModel.clear(); search.setText(""); refreshing = false;
+            addItem(); dirty = false; status.setText("Готово к созданию предметов"); status.setToolTipText(null); updateSaveState();
         }
         private void addItem() {
             commit();
@@ -162,17 +278,20 @@ public final class ItemContentEditor {
             int sequence = project.items.size() + 1;
             while (containsId("itemcontent:item_" + sequence)) sequence++;
             entry.id = "itemcontent:item_" + sequence; entry.name = "Предмет " + sequence;
-            project.items.add(entry); listModel.addElement(entry); list.setSelectedValue(entry, true); dirty = true;
+            project.items.add(entry);
+            refreshing = true; search.setText(""); refreshing = false;
+            refreshList(entry); dirty = true; updateSaveState();
+            name.requestFocusInWindow(); name.selectAll();
         }
         private boolean containsId(String id) { return project.items.stream().anyMatch(item -> item.id.equals(id)); }
         private void removeItem() {
             if (current == null) return;
-            if (JOptionPane.showConfirmDialog(this, "Удалить «" + current.name + "» из проекта?", "Удаление предмета", JOptionPane.YES_NO_OPTION) != JOptionPane.YES_OPTION) return;
+            if (JOptionPane.showConfirmDialog(this, "Удалить «" + current.name + "» из списка?", "Удаление предмета", JOptionPane.YES_NO_OPTION) != JOptionPane.YES_OPTION) return;
             int index = list.getSelectedIndex(); refreshing = true;
             project.items.remove(current); listModel.removeElement(current); current = null;
             refreshing = false;
             if (!listModel.isEmpty()) list.setSelectedIndex(Math.min(index, listModel.size() - 1)); else showCurrent();
-            dirty = true;
+            dirty = true; updateSaveState();
         }
         private String nextFieldId() {
             java.util.Set<String> ids = new java.util.HashSet<>();
@@ -200,83 +319,92 @@ public final class ItemContentEditor {
         private void showCurrent() {
             refreshing = true;
             boolean enabled = current != null;
-            for (JComponent component : new JComponent[]{name, id, appearance, maxCount, custom, fireproof, choosePng, table}) component.setEnabled(enabled);
+            for (JComponent component : new JComponent[]{name, id, appearance, maxCount, custom, existing, fireproof, choosePng, table}) component.setEnabled(enabled);
             name.setText(enabled ? current.name : ""); id.setText(enabled ? current.id.substring("itemcontent:".length()) : "");
             appearance.setText(enabled ? current.appearance : "minecraft:iron_ingot"); maxCount.setValue(enabled ? current.maxCount : 64);
-            custom.setSelected(enabled && current.customModel); fireproof.setSelected(enabled && current.fireproof);
+            custom.setSelected(enabled && current.customModel); existing.setSelected(!enabled || !current.customModel);
+            fireproof.setSelected(enabled && current.fireproof);
             selectedTexture = enabled ? current.texture : ""; fields.setRowCount(0);
             if (enabled) for (var field : current.fields) fields.addRow(new Object[]{field.id, field.value, field.min, field.max});
-            updateImage(); refreshing = false;
+            selectionTitle.setText(enabled ? current.name : search.getText().isBlank() ? "Создайте первый предмет" : "Ничего не найдено");
+            selectionId.setText(enabled ? current.id : "Измените поиск или нажмите «Создать предмет»");
+            removeButton.setEnabled(enabled); duplicateButton.setEnabled(enabled); addFieldButton.setEnabled(enabled); removeFieldButton.setEnabled(enabled);
+            updateImage(); refreshing = false; updateSaveState();
         }
         private void updateImage() {
             appearance.setEnabled(current != null && !custom.isSelected()); choosePng.setEnabled(current != null);
-            preview.setIcon(null); preview.setText(custom.isSelected() ? "Выберите PNG" : "Готовая модель");
-            texturePath.setText("Используется готовая модель Minecraft."); texturePath.setToolTipText(null);
+            preview.showImage(null, custom.isSelected() ? "Выберите PNG" : "Модель видна в игре");
+            texturePath.setText(custom.isSelected() ? "Картинка ещё не выбрана" : "Внешний вид существующего предмета"); texturePath.setToolTipText(null);
             if (custom.isSelected() && selectedTexture != null && !selectedTexture.isBlank()) {
                 try {
-                    texturePath.setText(Path.of(selectedTexture).getFileName().toString()); texturePath.setToolTipText(selectedTexture);
-                    ItemProject.validatePng(Path.of(selectedTexture));
-                    BufferedImage image = ImageIO.read(Path.of(selectedTexture).toFile());
-                    double scale = Math.min(128.0 / image.getWidth(), 128.0 / image.getHeight());
-                    preview.setIcon(new ImageIcon(image.getScaledInstance(Math.max(1, (int) (image.getWidth() * scale)),
-                            Math.max(1, (int) (image.getHeight() * scale)), Image.SCALE_REPLICATE))); preview.setText("");
-                } catch (Exception e) { preview.setText("PNG недоступна"); }
+                    Path path = Path.of(selectedTexture); ItemProject.validatePng(path);
+                    BufferedImage image = ImageIO.read(path.toFile()); preview.showImage(image, "");
+                    texturePath.setText(image.getWidth() + " × " + image.getHeight() + " px · " + path.getFileName()); texturePath.setToolTipText(selectedTexture);
+                } catch (Exception e) { preview.showImage(null, "PNG недоступна"); texturePath.setText("Выберите картинку заново"); }
             }
         }
-        private boolean save() {
+        private boolean save() { return save(false); }
+        private boolean saveAs() { return save(true); }
+        private boolean save(boolean chooseFile) {
             try {
                 commit(); project.validate();
-                JFileChooser chooser = chooser("Сохранить проект предметов", false);
-                chooser.setFileFilter(new FileNameExtensionFilter("Проект Item Content (*.icproject)", "icproject"));
-                if (document != null) chooser.setSelectedFile(document.toFile());
-                if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return false;
-                Path path = chooser.getSelectedFile().toPath();
-                if (!path.getFileName().toString().endsWith(".icproject")) path = path.resolveSibling(path.getFileName() + ".icproject");
-                if (Files.exists(path) && JOptionPane.showConfirmDialog(this, "Заменить этот файл проекта?", "Сохранение", JOptionPane.YES_NO_OPTION) != JOptionPane.YES_OPTION) return false;
-                project.save(path); document = path; dirty = false; status.setText("Проект сохранён: " + path); return true;
+                Path path = document;
+                if (chooseFile || path == null) {
+                    JFileChooser chooser = chooser("Сохранить список предметов", false);
+                    chooser.setFileFilter(new FileNameExtensionFilter("Список предметов (*.icproject)", "icproject"));
+                    if (document != null) chooser.setSelectedFile(document.toFile());
+                    if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return false;
+                    path = chooser.getSelectedFile().toPath();
+                    if (!path.getFileName().toString().endsWith(".icproject")) path = path.resolveSibling(path.getFileName() + ".icproject");
+                    if (Files.exists(path) && JOptionPane.showConfirmDialog(this, "Заменить этот список предметов?", "Сохранение", JOptionPane.YES_NO_OPTION) != JOptionPane.YES_OPTION) return false;
+                }
+                project.save(path); document = path; dirty = false; status.setText("Список сохранён: " + path.getFileName()); status.setToolTipText(path.toString()); updateSaveState(); return true;
             } catch (Exception e) { error(e); return false; }
         }
         private void open() {
             if (!mayDiscard()) return;
             guarded(() -> {
-                JFileChooser chooser = chooser("Открыть проект предметов", false); chooser.setFileFilter(new FileNameExtensionFilter("Проект Item Content", "icproject"));
+                JFileChooser chooser = chooser("Открыть список предметов", false); chooser.setFileFilter(new FileNameExtensionFilter("Список предметов", "icproject"));
                 if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
-                Path path = chooser.getSelectedFile().toPath(); ItemProject loaded = ItemProject.load(path);
-                refreshing = true; project = loaded; current = null; listModel.clear();
-                project.items.forEach(listModel::addElement); refreshing = false; list.setSelectedIndex(0);
-                document = path; dirty = false; status.setText("Открыт проект: " + path);
+                openList(chooser.getSelectedFile().toPath());
             });
+        }
+        void openList(Path path) throws java.io.IOException {
+            ItemProject loaded = ItemProject.load(path);
+            refreshing = true; project = loaded; current = null; search.setText(""); refreshing = false;
+            refreshList(project.items.get(0));
+            document = path; dirty = false; status.setText("Открыт список: " + path.getFileName()); status.setToolTipText(path.toString()); updateSaveState();
         }
         private void export() {
             guarded(() -> {
-                commit(); project.validate(); JFileChooser chooser = chooser("Новая или пустая папка экспорта", true);
+                commit(); project.validate(); JFileChooser chooser = chooser("Куда подготовить файлы для игры — новая или пустая папка", true);
                 if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return;
                 Path target = chooser.getSelectedFile().toPath(); project.export(target);
-                status.setText("Экспортировано предметов: " + project.items.size() + ". Папка: " + target);
+                status.setText("Подготовлено предметов: " + project.items.size() + ". Папка: " + target);
                 JOptionPane.showMessageDialog(this, "Готово: " + target + "\n\n"
                         + "1. config/item-content → в config сервера и каждого клиента.\n"
                         + "2. resourcepacks/item-content → в resourcepacks клиента; включите в игре.\n"
                         + "3. Перезапустите сервер и клиент.\n"
                         + "Предметы появятся во вкладке «Ингредиенты».\n\n"
-                        + "Экспорт не сохраняет исходный проект: используйте «Сохранить проект…».\n"
+                        + "«Сохранить» сохраняет список для дальнейшего редактирования.\n"
                         + "Рецепты настраиваются отдельно в Item Parameters.", "Предметы готовы к установке", JOptionPane.INFORMATION_MESSAGE);
             });
         }
         boolean mayDiscard() {
             if (!dirty) return true;
-            int answer = JOptionPane.showConfirmDialog(this, "Сохранить изменения проекта?", "Несохранённые изменения", JOptionPane.YES_NO_CANCEL_OPTION);
+            int answer = JOptionPane.showConfirmDialog(this, "Сохранить изменения списка предметов?", "Несохранённые изменения", JOptionPane.YES_NO_CANCEL_OPTION);
             return answer == JOptionPane.NO_OPTION || answer == JOptionPane.YES_OPTION && save();
         }
         private void help() {
-            JOptionPane.showMessageDialog(this, "Это отдельный конструктор новых предметов для Fabric 1.20.1.\n\n"
-                    + "1. «+ Добавить» создаёт описание предмета слева.\n"
-                    + "2. Название — надпись в игре. ID — постоянный адрес, например steel_plate.\n"
-                    + "3. Включите «Своя картинка PNG» и выберите файл либо оставьте готовую модель.\n"
-                    + "4. «Сохранить проект…» сохраняет редактируемый .icproject.\n"
-                    + "5. «Экспорт для Minecraft…» создаёт конфигурацию и resource pack.\n\n"
-                    + "Начальные параметры необязательны; они нужны для совместимости с Item Parameters.\n"
-                    + "Формулы, рецепты и станки относятся к первому проекту.\n"
-                    + "Подробная инструкция: docs/editor.md в этом репозитории.", "Как пользоваться", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, "1. «Создать предмет» добавляет предмет в список слева.\n"
+                    + "2. Справа задайте название, внешний вид и свойства.\n"
+                    + "3. «Сохранить» запоминает весь список для дальнейшего редактирования.\n"
+                    + "4. «Подготовить для игры» создаёт настройки и картинки для Minecraft.\n\n"
+                    + "Список предметов — ваши сохранённые настройки. Новый мод при этом не создаётся.\n"
+                    + "Один мод Item Content загружает все подготовленные вами предметы.\n\n"
+                    + "«Характеристики» — необязательные числа для Item Parameters.\n"
+                    + "Формулы и рецепты настраиваются в его отдельном редакторе.\n"
+                    + "Подробная инструкция: docs/editor.md.", "Как создать предмет", JOptionPane.INFORMATION_MESSAGE);
         }
         private JFileChooser chooser(String title, boolean directories) {
             JFileChooser chooser = new JFileChooser(document == null ? null : document.toAbsolutePath().getParent().toFile());
@@ -284,14 +412,6 @@ public final class ItemContentEditor {
         }
         private void guarded(CheckedAction action) { try { action.run(); } catch (Exception e) { error(e); } }
         private void error(Exception e) { status.setText("Не выполнено: " + e.getMessage()); JOptionPane.showMessageDialog(this, e.getMessage(), "Проверьте настройки", JOptionPane.ERROR_MESSAGE); }
-        private void button(JPanel parent, String text, String name, CheckedAction action) {
-            JButton button = new JButton(text); button.setName(name); button.addActionListener(e -> guarded(action)); parent.add(button);
-        }
-        private void row(JPanel panel, int row, String label, JComponent value) {
-            GridBagConstraints c = new GridBagConstraints(); c.gridy = row; c.gridx = 0; c.anchor = GridBagConstraints.WEST; c.insets = new Insets(6, 0, 6, 14);
-            panel.add(new JLabel(label), c); c.gridx = 1; c.weightx = 1; c.fill = GridBagConstraints.HORIZONTAL;
-            panel.add(value, c);
-        }
         @FunctionalInterface private interface CheckedAction { void run() throws Exception; }
     }
 }
