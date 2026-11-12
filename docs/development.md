@@ -80,3 +80,15 @@ java -jar editor/build/libs/item-content-editor-1.2.0.jar --screenshot build/edi
 
 UI-тесты проходят при масштабах 1, 1.25 и 1.5. Они проверяют видимость действий и высоту полей,
 но не заменяют визуальную проверку нативного окна.
+
+## Running the editor while rebuilding
+
+Use `run-editor.bat` or `tools/run-editor.ps1`. The launcher copies the chosen editor JAR to
+`.editor-runtime/<build digest>/` inside the application folder and starts that immutable copy.
+Rebuilding the distributable JAR cannot change the classes/resources used by an already open window.
+Each editor build reuses its own snapshot; the folder is ignored by Git and is not included in releases.
+Old snapshots can be removed manually after all editor instances using them have closed.
+Do not rebuild a JAR used by a directly launched `java -jar` process.
+
+Native Windows regression check (opens temporary test windows):
+`powershell -File tools/check-editor-close.ps1 -JavaHome <JDK path>` after building the editor.

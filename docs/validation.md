@@ -4,6 +4,13 @@
 
 ### Editor clarity and installation update
 
+- Native close-dialog regression: replacing a directly running JAR reproduced a **136×48** empty
+  dialog and `no ComponentUI class for JOptionPane`; an unchanged JAR produced a normal dialog.
+- Launcher now starts an immutable copy of the editor JAR. The new native close dialog is **665×180**
+  at normal scale, with explicit save/discard/cancel options. Discard returns permission to close.
+- `tools/check-editor-close.ps1` tests discard, cancel and the dialog X button while deliberately
+  replacing the source JAR of an isolated fixture. No user editor process or document is used.
+
 - Desktop suite: **37 tests**, zero failures. New regression checks cover appearance-mode isolation,
   read-only catalog selection, and hiding the inactive PNG preview.
 - Installation uses temporary test games/worlds: first install, custom creative groups, preserving catalog/other mods,

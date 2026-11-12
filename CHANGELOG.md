@@ -2,6 +2,9 @@
 
 ## 1.2.0
 
+- Launch immutable editor copies so rebuilding cannot break dialogs in a running instance.
+- Use explicit save, discard and cancel labels when closing the editor.
+
 - Clarify editor sections and use a custom PNG by default for new items.
 - Select borrowed appearance from the game catalog instead of typing arbitrary IDs.
 - Add explicit game-folder installation with backup/rollback; retain portable export.

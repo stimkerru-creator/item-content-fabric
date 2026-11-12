@@ -17,3 +17,5 @@ hs_err_pid*
 # Runtime logs and preserved pre-migration documents
 logs/
 *.before-item-only-*.bak
+
+.editor-runtime/

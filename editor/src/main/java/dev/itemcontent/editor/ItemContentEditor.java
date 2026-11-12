@@ -30,7 +30,7 @@ public final class ItemContentEditor {
             frame.setMinimumSize(new Dimension(Math.min(980, available.width), Math.min(580, available.height)));
             frame.setSize(windowSize(available)); frame.setLocationRelativeTo(null);
             frame.addWindowListener(new WindowAdapter() {
-                @Override public void windowClosing(WindowEvent e) { if (panel.mayDiscard()) frame.dispose(); }
+                @Override public void windowClosing(WindowEvent e) { if (panel.mayClose()) frame.dispose(); }
             });
             frame.setVisible(true);
             for (int index = 0; index + 1 < args.length; index++) {
@@ -490,10 +490,18 @@ public final class ItemContentEditor {
                         + "Item Content работает самостоятельно.", "Предметы готовы к установке", JOptionPane.INFORMATION_MESSAGE);
             });
         }
-        boolean mayDiscard() {
+        boolean mayClose() { return confirmUnsaved(true); }
+        boolean mayDiscard() { return confirmUnsaved(false); }
+        private boolean confirmUnsaved(boolean closing) {
             if (!dirty) return true;
-            int answer = JOptionPane.showConfirmDialog(this, "Сохранить изменения списка предметов?", "Несохранённые изменения", JOptionPane.YES_NO_CANCEL_OPTION);
-            return answer == JOptionPane.NO_OPTION || answer == JOptionPane.YES_OPTION && save();
+            String[] options = closing
+                    ? new String[]{"Сохранить и закрыть", "Закрыть без сохранения", "Остаться в редакторе"}
+                    : new String[]{"Сохранить изменения", "Продолжить без сохранения", "Отмена"};
+            int answer = JOptionPane.showOptionDialog(this,
+                    closing ? "Есть несохранённые изменения. Сохранить их перед закрытием редактора?" : "Сохранить изменения текущего списка перед продолжением?",
+                    closing ? "Закрыть редактор" : "Несохранённые изменения",
+                    JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
+            return answer == 1 || answer == 0 && save();
         }
         private void help() {
             JOptionPane.showMessageDialog(this, "1. «Создать предмет» добавляет предмет в список слева.\n"

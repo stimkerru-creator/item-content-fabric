@@ -1,4 +1,4 @@
-﻿param([switch]$Check, [string]$Screenshot)
+﻿param([switch]$Check, [string]$Screenshot, [string]$Open)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $javaCandidates = @()
@@ -48,6 +48,32 @@ if (!(Test-Path -LiteralPath $jar)) {
     if ($LASTEXITCODE -ne 0) { throw 'Editor build failed. See the messages above.' }
 }
 if ($Check) { Write-Output "Java: $selectedJava"; Write-Output "Editor: $jar"; exit 0 }
-if ($Screenshot) { & $selectedJava -jar $jar --screenshot $Screenshot }
-else { & $selectedJava -jar $jar }
+function Get-EditorDigest([string]$path) {
+    $stream = [System.IO.File]::OpenRead($path)
+    $algorithm = [System.Security.Cryptography.SHA256]::Create()
+    try { return ([System.BitConverter]::ToString($algorithm.ComputeHash($stream))).Replace('-', '').ToLowerInvariant() }
+    finally { $algorithm.Dispose(); $stream.Dispose() }
+}
+# A running JVM must never read from a JAR that the next build can overwrite.
+# One immutable snapshot is reused for each exact editor build.
+$editorDigest = (Get-EditorDigest $jar)
+$runtimeFolder = Join-Path $projectRoot (".editor-runtime\" + $editorDigest)
+$runtimeJar = Join-Path $runtimeFolder (Split-Path -Leaf $jar)
+New-Item -ItemType Directory -Path $runtimeFolder -Force | Out-Null
+if (!(Test-Path -LiteralPath $runtimeJar)) {
+    $pendingJar = Join-Path $runtimeFolder ([Guid]::NewGuid().ToString('N') + '.tmp')
+    Copy-Item -LiteralPath $jar -Destination $pendingJar
+    if ((Get-EditorDigest $pendingJar) -ne $editorDigest) {
+        throw 'Editor changed during launch. Run the launcher again after the build finishes.'
+    }
+    try { Move-Item -LiteralPath $pendingJar -Destination $runtimeJar -ErrorAction Stop }
+    catch { if (!(Test-Path -LiteralPath $runtimeJar)) { throw } }
+}
+if ((Get-EditorDigest $runtimeJar) -ne $editorDigest) {
+    throw 'The editor runtime copy is damaged. Do not overwrite it while an editor is running.'
+}
+$editorArguments = @('-jar', $runtimeJar)
+if ($Screenshot) { $editorArguments += @('--screenshot', $Screenshot) }
+if ($Open) { $editorArguments += @('--open', $Open) }
+& $selectedJava @editorArguments
 exit $LASTEXITCODE
