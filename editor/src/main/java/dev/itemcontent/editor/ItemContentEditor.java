@@ -1,6 +1,10 @@
 package dev.itemcontent.editor;
 
 import javax.imageio.ImageIO;
+import dev.itemcontent.definition.*;
+import com.google.gson.*;
+import java.awt.datatransfer.*;
+import java.util.*;
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -34,6 +38,20 @@ public final class ItemContentEditor {
                     Path file = Path.of(args[index + 1]); panel.guarded(() -> panel.openList(file));
                 }
             }
+            for (int index = 0; index + 1 < args.length; index++) if (args[index].equals("--select")) panel.selectItem(args[index + 1]);
+            if (Arrays.asList(args).contains("--behavior")) ((JTabbedPane) findNamed(panel, "detailsTabs")).setSelectedIndex(1);
+            if (args.length >= 3 && args[0].equals("--screenshot-catalog")) {
+                try {
+                    Path file = Path.of(args[2]); panel.loadCatalog(file);
+                    var dialog = new CatalogDialog(panel, panel.project, panel.catalog, file.toAbsolutePath().getParent(), entry -> {});
+                    dialog.setModalityType(Dialog.ModalityType.MODELESS); dialog.setVisible(true);
+                    SwingUtilities.invokeLater(() -> {
+                        try { dialog.validate(); var image = new BufferedImage(dialog.getContentPane().getWidth(), dialog.getContentPane().getHeight(), BufferedImage.TYPE_INT_RGB); var graphics=image.createGraphics(); dialog.getContentPane().printAll(graphics); graphics.dispose(); ImageIO.write(image,"png",Path.of(args[1]).toFile()); }
+                        catch(Exception failure) { failure.printStackTrace(); System.exit(1); }
+                        dialog.dispose(); frame.dispose();
+                    });
+                } catch(Exception failure) { failure.printStackTrace(); System.exit(1); }
+            }
             if (args.length >= 2 && args[0].equals("--screenshot")) {
                 if (args.length >= 4 && args[2].matches("[0-9]+") && args[3].matches("[0-9]+")) frame.setSize(Integer.parseInt(args[2]), Integer.parseInt(args[3]));
                 SwingUtilities.invokeLater(() -> {
@@ -47,6 +65,9 @@ public final class ItemContentEditor {
                 });
             }
         });
+    }
+    private static Component findNamed(Container parent, String name) {
+        for (var child : parent.getComponents()) { if (name.equals(child.getName())) return child; if (child instanceof Container nested) { var found = findNamed(nested, name); if (found != null) return found; } } return null;
     }
     static Dimension windowSize(Rectangle available) {
         return new Dimension(Math.min(1280, Math.max(1, available.width - 48)), Math.min(820, Math.max(1, available.height - 48)));
@@ -68,6 +89,18 @@ public final class ItemContentEditor {
         private final JLabel itemCount = label("", 12, false, MUTED);
         private final JLabel selectionTitle = label("", 23, true, INK);
         private final JLabel selectionId = label("", 12, false, MUTED);
+        private final JComboBox<String> typeCategory = new JComboBox<>();
+        private final JComboBox<TypeDefinition> itemType = new JComboBox<>();
+        private final JComboBox<GroupChoice> creativeGroup = new JComboBox<>();
+        private final JLabel idPrefix = label("itemcontent:", 13, false, MUTED);
+        private final BehaviorForm behavior = new BehaviorForm(this::changed);
+        private final JTabbedPane groupTabs = new JTabbedPane(JTabbedPane.TOP, JTabbedPane.SCROLL_TAB_LAYOUT);
+        private final java.util.List<String> tabGroups = new ArrayList<>();
+        private String selectedGroup = "";
+        private GameCatalog catalog;
+        private Path catalogFile;
+        private final JButton textureOptions = new JButton("Дополнительные текстуры…");
+        private record GroupChoice(String id, String name) { @Override public String toString() { return name; } }
         private final JButton choosePng = new JButton("Выбрать картинку…");
         private JButton removeButton, duplicateButton;
         private boolean refreshing, dirty;
@@ -78,10 +111,28 @@ public final class ItemContentEditor {
             super(new BorderLayout()); setBackground(BACKGROUND);
             add(header(), BorderLayout.NORTH);
             JPanel body = panel(new BorderLayout(20, 0)); body.setBorder(padding(20, 24, 16, 24));
+            JPanel categoryBar = panel(new BorderLayout(8, 0)); groupTabs.setName("creativeTabs"); groupTabs.setPreferredSize(new Dimension(400, 42));
+            categoryBar.add(groupTabs, BorderLayout.CENTER); JButton newGroup = new JButton("+ Вкладка"); newGroup.setName("addGroup"); newGroup.addActionListener(e -> guarded(this::addGroup)); categoryBar.add(newGroup, BorderLayout.EAST);
+            body.add(categoryBar, BorderLayout.NORTH);
             body.add(sidebar(), BorderLayout.WEST); body.add(inspector(), BorderLayout.CENTER); add(body, BorderLayout.CENTER);
             JPanel footer = panel(new BorderLayout(16, 0)); footer.setBorder(padding(0, 26, 12, 26));
             footer.add(status, BorderLayout.CENTER); footer.add(saveState, BorderLayout.EAST); add(footer, BorderLayout.SOUTH);
             bindChanges();
+            groupTabs.addChangeListener(e -> { if (!refreshing && groupTabs.getSelectedIndex() >= 0) guarded(() -> { commit(); selectedGroup = tabGroups.get(groupTabs.getSelectedIndex()); refreshList(current); }); });
+            groupTabs.setTransferHandler(new TransferHandler() {
+                @Override public boolean canImport(TransferSupport support) { return support.isDataFlavorSupported(DataFlavor.stringFlavor) && support.isDrop(); }
+                @Override public boolean importData(TransferSupport support) {
+                    if (!canImport(support)) return false;
+                    try {
+                        Point point = support.getDropLocation().getDropPoint(); int index = groupTabs.indexAtLocation(point.x, point.y);
+                        if (index <= 0) return false;
+                        String value = (String) support.getTransferable().getTransferData(DataFlavor.stringFlavor);
+                        commit(); ItemProject.Entry entry = project.items.stream().filter(item -> item.id.equals(value)).findFirst().orElse(null);
+                        if (entry == null || entry.categoryLocked) return false;
+                        entry.group = tabGroups.get(index); selectedGroup = entry.group; changed(); rebuildGroupTabs(); refreshList(entry); return true;
+                    } catch (Exception failure) { error(failure); return false; }
+                }
+            });
             shortcut("control N", "newItem", this::addItem);
             shortcut("control O", "openList", this::open);
             shortcut("control S", "saveList", () -> save());
@@ -102,6 +153,7 @@ public final class ItemContentEditor {
             JButton file = button(actions, "Файл", "fileMenu", () -> {}); quiet(file);
             JPopupMenu menu = new JPopupMenu();
             menu(menu, "Открыть список предметов…", "openProject", this::open);
+            menu(menu, "Открыть каталог из Minecraft…", "openCatalog", this::openCatalog);
             menu(menu, "Сохранить список как…", "saveAs", () -> saveAs()); menu.addSeparator();
             menu(menu, "Новый список предметов…", "newProject", () -> { if (mayDiscard()) reset(); });
             menu.addSeparator(); menu(menu, "Как пользоваться", "help", this::help);
@@ -122,7 +174,14 @@ public final class ItemContentEditor {
             list.setName("items"); list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
             list.setFixedCellHeight(68); list.setFixedCellWidth(216); list.setCellRenderer(new ItemCell());
             JScrollPane scroll = new JScrollPane(list); scroll.setBorder(BorderFactory.createEmptyBorder()); scroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-            side.add(scroll, BorderLayout.CENTER); side.add(label("Ctrl+N  —  создать предмет", 11, false, MUTED), BorderLayout.SOUTH); return side;
+            side.add(scroll, BorderLayout.CENTER);
+            JButton browse = new JButton("Предметы из Minecraft…"); browse.setName("browseCatalog"); browse.addActionListener(e -> guarded(this::browseCatalog)); side.add(browse, BorderLayout.SOUTH);
+            if (!GraphicsEnvironment.isHeadless()) list.setDragEnabled(true);
+            list.setTransferHandler(new TransferHandler() {
+                @Override public int getSourceActions(JComponent component) { return COPY; }
+                @Override protected Transferable createTransferable(JComponent component) { var entry = list.getSelectedValue(); return entry == null ? null : new StringSelection(entry.id); }
+            });
+            return side;
         }
         private JPanel inspector() {
             JPanel inspector = panel(new BorderLayout(0, 14));
@@ -132,7 +191,13 @@ public final class ItemContentEditor {
             duplicateButton = button(actions, "Дублировать", "duplicateItem", this::duplicateItem); quiet(duplicateButton);
             removeButton = button(actions, "Удалить", "removeItem", this::removeItem); quiet(removeButton);
             heading.add(actions, BorderLayout.EAST); inspector.add(heading, BorderLayout.NORTH);
-            inspector.add(appearanceCard(), BorderLayout.CENTER); return inspector;
+            JPanel editor = panel(new BorderLayout(0, 10)); JPanel selectors = panel(new GridLayout(1, 3, 12, 0));
+            typeCategory.setName("typeCategory"); itemType.setName("itemType"); creativeGroup.setName("creativeGroup");
+            selectors.add(selector("Класс", typeCategory)); selectors.add(selector("Тип / подкласс", itemType)); selectors.add(selector("Вкладка креатива", creativeGroup)); editor.add(selectors, BorderLayout.NORTH);
+            JTabbedPane details = new JTabbedPane(); details.setName("detailsTabs"); details.addTab("Внешний вид", appearanceCard());
+            JScrollPane properties = new JScrollPane(behavior); properties.setBorder(BorderFactory.createEmptyBorder()); properties.getVerticalScrollBar().setUnitIncrement(22);
+            details.addTab("Игровое поведение", properties); editor.add(details, BorderLayout.CENTER);
+            inspector.add(editor, BorderLayout.CENTER); return inspector;
         }
         private JComponent appearanceCard() {
             preview.setName("itemPreview");
@@ -141,11 +206,12 @@ public final class ItemContentEditor {
             JPanel modes = panel(new GridLayout(1, 2, 4, 0)); ButtonGroup group = new ButtonGroup(); group.add(existing); group.add(custom);
             modes.add(existing); modes.add(custom); art.add(modes, BorderLayout.NORTH); art.add(preview, BorderLayout.CENTER);
             JPanel controls = panel(new BorderLayout(0, 8)); choosePng.setName("choosePng"); controls.add(choosePng, BorderLayout.NORTH);
-            controls.add(texturePath, BorderLayout.CENTER); controls.add(label("PNG с прозрачностью · например 32 × 32", 11, false, MUTED), BorderLayout.SOUTH); art.add(controls, BorderLayout.SOUTH);
+            JPanel extra = panel(new BorderLayout(0, 6)); extra.add(texturePath, BorderLayout.NORTH); textureOptions.setName("textureOptions"); textureOptions.addActionListener(e -> guarded(this::textures)); extra.add(textureOptions, BorderLayout.CENTER);
+            controls.add(extra, BorderLayout.CENTER); controls.add(label("PNG с прозрачностью · например 32 × 32", 11, false, MUTED), BorderLayout.SOUTH); art.add(controls, BorderLayout.SOUTH);
             JPanel form = panel(new GridBagLayout());
             name.setName("itemName"); id.setName("itemId"); appearance.setName("appearance");
             field(form, 0, "Название в игре", name, null);
-            JPanel address = panel(new BorderLayout(8, 0)); address.add(label("itemcontent:", 13, false, MUTED), BorderLayout.WEST); address.add(id, BorderLayout.CENTER);
+            JPanel address = panel(new BorderLayout(8, 0)); address.add(idPrefix, BorderLayout.WEST); address.add(id, BorderLayout.CENTER);
             field(form, 1, "ID предмета", address, "Строчные a–z, цифры и _. Например: steel_plate");
             JPanel properties = panel(new BorderLayout(16, 0)); ((JSpinner.DefaultEditor) maxCount.getEditor()).getTextField().setColumns(3); properties.add(maxCount, BorderLayout.WEST); properties.add(fireproof, BorderLayout.CENTER);
             field(form, 2, "Предметов в одном стаке", properties, null);
@@ -156,6 +222,12 @@ public final class ItemContentEditor {
             JScrollPane scroll = new JScrollPane(content); scroll.setBorder(BorderFactory.createEmptyBorder()); scroll.getVerticalScrollBar().setUnitIncrement(18); scroll.setName("itemDetailsScroll"); return scroll;
         }
         private void bindChanges() {
+            typeCategory.addActionListener(e -> { if (!refreshing && current != null && !current.existing) guarded(() -> {
+                String category = Objects.toString(typeCategory.getSelectedItem(), "");
+                TypeDefinition next = project.types().values().stream().filter(type -> type.category().equals(category)).findFirst().orElseThrow(); changeType(next);
+            }); });
+            itemType.addActionListener(e -> { if (!refreshing && current != null && !current.existing && itemType.getSelectedItem() instanceof TypeDefinition type) guarded(() -> changeType(type)); });
+            creativeGroup.addActionListener(e -> { if (!refreshing && current != null && creativeGroup.getSelectedItem() instanceof GroupChoice group) { current.group = group.id(); changed(); } });
             list.addListSelectionListener(e -> {
                 if (e.getValueIsAdjusting() || refreshing) return;
                 try { commit(); current = list.getSelectedValue(); showCurrent(); }
@@ -167,9 +239,9 @@ public final class ItemContentEditor {
             DocumentListener changes = listener(() -> {
                 if (!refreshing) {
                     dirty = true;
-                    if (current != null) { current.name = name.getText().trim(); current.id = "itemcontent:" + id.getText().trim(); }
+                    if (current != null) { current.name = name.getText().trim(); if (!current.existing) current.id = "itemcontent:" + id.getText().trim(); }
                     selectionTitle.setText(name.getText().isBlank() ? "Без названия" : name.getText());
-                    selectionId.setText("itemcontent:" + id.getText()); list.repaint(); updateSaveState();
+                    selectionId.setText(current != null && current.existing ? current.id : "itemcontent:" + id.getText()); list.repaint(); updateSaveState();
                 }
             });
             name.getDocument().addDocumentListener(changes); id.getDocument().addDocumentListener(changes); appearance.getDocument().addDocumentListener(changes);
@@ -194,19 +266,22 @@ public final class ItemContentEditor {
             String query = search.getText().trim().toLowerCase(Locale.ROOT);
             refreshing = true; listModel.clear();
             for (var entry : project.items)
-                if (query.isEmpty() || entry.name.toLowerCase(Locale.ROOT).contains(query) || entry.id.toLowerCase(Locale.ROOT).contains(query)) listModel.addElement(entry);
+                if ((selectedGroup.isEmpty() || entry.group.equals(selectedGroup)) && (query.isEmpty() || entry.name.toLowerCase(Locale.ROOT).contains(query) || entry.id.toLowerCase(Locale.ROOT).contains(query))) listModel.addElement(entry);
             if (preferred != null && listModel.contains(preferred)) list.setSelectedValue(preferred, true);
             else if (!listModel.isEmpty()) list.setSelectedIndex(0);
             current = list.getSelectedValue(); refreshing = false; showCurrent();
         }
         private void duplicateItem() {
             if (current == null) return;
-            commit(); ItemProject.Entry entry = new ItemProject.Entry();
-            int suffix = 2; String base = current.id;
+            commit(); ItemProject.Entry entry = current.copy();
+            entry.existing = false; entry.categoryLocked = false;
+            String base = "itemcontent:" + current.id.substring(current.id.indexOf(':') + 1); int suffix = 2;
             while (containsId(base + "_" + suffix)) suffix++;
             entry.id = base + "_" + suffix; entry.name = current.name + " — копия";
-            entry.appearance = current.appearance; entry.texture = current.texture; entry.customModel = current.customModel;
-            entry.maxCount = current.maxCount; entry.fireproof = current.fireproof;
+            if (current.existing) {
+                JsonObject merged = current.referenceProperties.deepCopy(); current.properties.entrySet().forEach(e -> merged.add(e.getKey(), e.getValue())); entry.properties = project.type(entry).validate(merged, false);
+                if (entry.group.equals("itemcontent:keep")) entry.group = project.type(entry).defaultGroup();
+            }
             project.items.add(entry); refreshing = true; search.setText(""); refreshing = false;
             refreshList(entry); changed(); name.requestFocusInWindow(); name.selectAll();
         }
@@ -250,7 +325,7 @@ public final class ItemContentEditor {
         }
 
         private void reset() {
-            project = new ItemProject(); current = null; document = null;
+            project = new ItemProject(); current = null; document = null; selectedGroup = ""; rebuildGroupTabs();
             refreshing = true; listModel.clear(); search.setText(""); refreshing = false;
             addItem(); dirty = false; status.setText("Готово к созданию предметов"); status.setToolTipText(null); updateSaveState();
         }
@@ -260,6 +335,7 @@ public final class ItemContentEditor {
             int sequence = project.items.size() + 1;
             while (containsId("itemcontent:item_" + sequence)) sequence++;
             entry.id = "itemcontent:item_" + sequence; entry.name = "Предмет " + sequence;
+            if (!selectedGroup.isEmpty()) entry.group = selectedGroup;
             project.items.add(entry);
             refreshing = true; search.setText(""); refreshing = false;
             refreshList(entry); dirty = true; updateSaveState();
@@ -278,8 +354,9 @@ public final class ItemContentEditor {
         private void commit() {
             if (refreshing || current == null) return;
             try { maxCount.commitEdit(); } catch (java.text.ParseException e) { throw new IllegalArgumentException("Введите целое количество предметов в стаке."); }
-            current.name = name.getText().trim(); current.id = "itemcontent:" + id.getText().trim();
+            current.name = name.getText().trim(); if (!current.existing) current.id = "itemcontent:" + id.getText().trim();
             current.appearance = appearance.getText().trim(); current.maxCount = ((Number) maxCount.getValue()).intValue();
+            current.properties = behavior.read();
             current.customModel = custom.isSelected(); current.fireproof = fireproof.isSelected(); current.texture = selectedTexture;
             list.repaint();
         }
@@ -287,7 +364,8 @@ public final class ItemContentEditor {
             refreshing = true;
             boolean enabled = current != null;
             for (JComponent component : new JComponent[]{name, id, appearance, maxCount, custom, existing, fireproof, choosePng}) component.setEnabled(enabled);
-            name.setText(enabled ? current.name : ""); id.setText(enabled ? current.id.substring("itemcontent:".length()) : "");
+            name.setText(enabled ? current.name : ""); id.setText(enabled ? current.existing ? current.id : current.id.substring("itemcontent:".length()) : "");
+            idPrefix.setText(enabled && current.existing ? "" : "itemcontent:"); id.setEnabled(enabled && !current.existing);
             appearance.setText(enabled ? current.appearance : "minecraft:iron_ingot"); maxCount.setValue(enabled ? current.maxCount : 64);
             custom.setSelected(enabled && current.customModel); existing.setSelected(!enabled || !current.customModel);
             fireproof.setSelected(enabled && current.fireproof);
@@ -295,13 +373,26 @@ public final class ItemContentEditor {
             selectionTitle.setText(enabled ? current.name : search.getText().isBlank() ? "Создайте первый предмет" : "Ничего не найдено");
             selectionId.setText(enabled ? current.id : "Измените поиск или нажмите «Создать предмет»");
             removeButton.setEnabled(enabled); duplicateButton.setEnabled(enabled);
+            if (enabled) {
+                TypeDefinition definition = project.type(current); typeCategory.removeAllItems(); project.types().values().stream().map(TypeDefinition::category).distinct().forEach(typeCategory::addItem);
+                typeCategory.setSelectedItem(definition.category()); itemType.removeAllItems(); project.types().values().stream().filter(type -> type.category().equals(definition.category())).forEach(itemType::addItem); itemType.setSelectedItem(definition);
+                creativeGroup.removeAllItems(); if (current.existing) creativeGroup.addItem(new GroupChoice("itemcontent:keep", "Сохранить исходные вкладки"));
+                groupNames().forEach((key, value) -> creativeGroup.addItem(new GroupChoice(key, value)));
+                if (!groupNames().containsKey(current.group) && !current.group.equals("itemcontent:keep")) creativeGroup.addItem(new GroupChoice(current.group, current.group));
+                for (int index = 0; index < creativeGroup.getItemCount(); index++) if (creativeGroup.getItemAt(index).id().equals(current.group)) creativeGroup.setSelectedIndex(index);
+                typeCategory.setEnabled(!current.existing); itemType.setEnabled(!current.existing); creativeGroup.setEnabled(!current.categoryLocked);
+                behavior.show(current, definition);
+            }
+            behavior.setVisible(enabled); typeCategory.setEnabled(enabled && !current.existing); itemType.setEnabled(enabled && !current.existing); creativeGroup.setEnabled(enabled && !current.categoryLocked);
             updateImage(); refreshing = false; updateSaveState();
         }
         private void updateImage() {
-            appearance.setEnabled(current != null && !custom.isSelected()); choosePng.setEnabled(current != null);
+            appearance.setEnabled(current != null && !custom.isSelected() && !project.type(current).model().equals("chest") && !(current.existing && project.type(current).block())); choosePng.setEnabled(current != null);
             preview.showImage(null, custom.isSelected() ? "Выберите PNG" : "Модель видна в игре");
-            texturePath.setText(custom.isSelected() ? "Картинка ещё не выбрана" : "Внешний вид существующего предмета"); texturePath.setToolTipText(null);
-            if (custom.isSelected() && selectedTexture != null && !selectedTexture.isBlank()) {
+            texturePath.setText(current != null && project.type(current).model().equals("chest") && !custom.isSelected() ? "Форма сундука · доски дуба" : custom.isSelected() ? "Картинка ещё не выбрана" : "Внешний вид существующего предмета"); texturePath.setToolTipText(null);
+            textureOptions.setEnabled(current != null && textureSlots().length > 0 && (custom.isSelected() || current.type.equals("itemcontent:armor")));
+            textureOptions.setToolTipText(custom.isSelected() || current != null && current.type.equals("itemcontent:armor") ? null : "Для отдельных кадров или граней сначала выберите основную PNG.");
+            if (selectedTexture != null && !selectedTexture.isBlank()) {
                 try {
                     Path path = Path.of(selectedTexture); ItemProject.validatePng(path);
                     BufferedImage image = ImageIO.read(path.toFile()); preview.showImage(image, "");
@@ -336,9 +427,10 @@ public final class ItemContentEditor {
                 openList(chooser.getSelectedFile().toPath());
             });
         }
+        void selectItem(String identifier) { for (int i=0; i<listModel.size(); i++) if (listModel.get(i).id.equals(identifier)) { list.setSelectedIndex(i); return; } }
         void openList(Path path) throws java.io.IOException {
             ItemProject loaded = ItemProject.load(path);
-            refreshing = true; project = loaded; current = null; search.setText(""); refreshing = false;
+            refreshing = true; project = loaded; current = null; selectedGroup = ""; search.setText(""); refreshing = false; rebuildGroupTabs();
             refreshList(project.items.get(0));
             document = path; dirty = false; status.setText(loaded.hasLegacyData() ? "Старые характеристики не используются. При сохранении будет создана резервная копия." : "Открыт список: " + path.getFileName()); status.setToolTipText(path.toString()); updateSaveState();
         }
@@ -352,7 +444,8 @@ public final class ItemContentEditor {
                         + "1. config/item-content → в config сервера и каждого клиента.\n"
                         + "2. resourcepacks/item-content → в resourcepacks клиента; включите в игре.\n"
                         + "3. Перезапустите сервер и клиент.\n"
-                        + "Предметы появятся во вкладке «Ингредиенты».\n\n"
+                        + "4. Если есть datapacks/item-content, скопируйте в datapacks вашего мира.\n"
+                        + "Предметы появятся в назначенных вкладках.\n\n"
                         + "«Сохранить» сохраняет список для дальнейшего редактирования.\n"
                         + "Item Content работает самостоятельно.", "Предметы готовы к установке", JOptionPane.INFORMATION_MESSAGE);
             });
@@ -370,6 +463,78 @@ public final class ItemContentEditor {
                     + "Список предметов — ваши сохранённые настройки. Новый мод при этом не создаётся.\n"
                     + "Один мод Item Content загружает все подготовленные вами предметы.\n\n"
                     + "Подробная инструкция: docs/editor.md.", "Как создать предмет", JOptionPane.INFORMATION_MESSAGE);
+        }
+        private JPanel selector(String title, JComponent input) {
+            JPanel panel = panel(new BorderLayout(0, 5)); panel.add(label(title, 12, true, MUTED), BorderLayout.NORTH); panel.add(input, BorderLayout.CENTER); return panel;
+        }
+        private Map<String, String> groupNames() {
+            Map<String, String> result = new LinkedHashMap<>(BuiltinTypes.GROUPS);
+            if (catalog != null) for (var group : catalog.groups()) result.put(group.id(), group.name());
+            for (var group : project.groups) result.put(group.id(), group.name()); return result;
+        }
+        private void rebuildGroupTabs() {
+            boolean previous = refreshing; refreshing = true; groupTabs.removeAll(); tabGroups.clear();
+            groupTabs.addTab("Все", new JPanel()); tabGroups.add("");
+            groupNames().forEach((key, value) -> { groupTabs.addTab(value, new JPanel()); tabGroups.add(key); });
+            int selected = tabGroups.indexOf(selectedGroup); groupTabs.setSelectedIndex(Math.max(0, selected)); refreshing = previous;
+        }
+        private void changeType(TypeDefinition type) {
+            if (current == null || current.existing || current.type.equals(type.id())) return;
+            commit(); JsonObject previous = current.properties; JsonObject values = new JsonObject();
+            for (var property : type.properties()) if (previous.has(property.id())) try { property.validate(previous.get(property.id())); values.add(property.id(), previous.get(property.id())); } catch (IllegalArgumentException ignored) { }
+            current.type = type.id(); current.properties = type.validate(values, false); current.group = type.defaultGroup();
+            current.maxCount = current.properties.has("durability") && current.properties.get("durability").getAsInt() > 0 ? 1 : 64;
+            if (!current.customModel) current.appearance = switch (type.id()) {
+                case "itemcontent:food" -> "minecraft:apple"; case "itemcontent:sword" -> "minecraft:iron_sword"; case "itemcontent:bow" -> "minecraft:bow"; case "itemcontent:crossbow" -> "minecraft:crossbow";
+                case "itemcontent:pickaxe" -> "minecraft:iron_pickaxe"; case "itemcontent:axe" -> "minecraft:iron_axe"; case "itemcontent:shovel" -> "minecraft:iron_shovel"; case "itemcontent:hoe" -> "minecraft:iron_hoe";
+                case "itemcontent:armor" -> "minecraft:iron_chestplate"; case "itemcontent:decorative_furnace" -> "minecraft:furnace"; default -> type.block() ? "minecraft:stone" : "minecraft:iron_ingot";
+            };
+            selectedGroup = ""; rebuildGroupTabs(); showCurrent(); changed();
+        }
+        private void addGroup() {
+            JTextField title = new JTextField("Новая вкладка", 20), address = new JTextField("my_items", 20);
+            JPanel form = new JPanel(new GridLayout(0,1,0,8)); form.add(new JLabel("Название вкладки")); form.add(title); form.add(new JLabel("ID после itemcontent: (латиница, цифры, _)")); form.add(address);
+            if (JOptionPane.showConfirmDialog(this, form, "Новая вкладка креатива", JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION) return;
+            String key = "itemcontent:" + address.getText().trim(); Identifiers.check(key);
+            if (groupNames().containsKey(key) || key.equals("itemcontent:keep") || title.getText().isBlank()) throw new IllegalArgumentException("Укажите уникальный ID и название вкладки");
+            commit(); project.groups.add(new GameCatalog.Group(key, title.getText().trim())); rebuildGroupTabs(); showCurrent(); changed();
+        }
+        private void openCatalog() throws java.io.IOException {
+            JFileChooser chooser = chooser("Откройте config/item-content/catalog.json из вашей игры", false); chooser.setFileFilter(new FileNameExtensionFilter("Каталог игры (*.json)", "json"));
+            if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
+            loadCatalog(chooser.getSelectedFile().toPath()); browseCatalog();
+        }
+        void loadCatalog(Path path) throws java.io.IOException {
+            GameCatalog loaded = GameCatalog.load(path); commit(); project.importTypes(loaded); catalog = loaded; catalogFile = path.toAbsolutePath();
+            rebuildGroupTabs(); showCurrent(); status.setText("Каталог: " + loaded.items().size() + " предметов. " + catalogFile.getFileName()); changed();
+        }
+        private void browseCatalog() throws java.io.IOException {
+            if (catalog == null) { openCatalog(); return; }
+            commit(); new CatalogDialog(this, project, catalog, catalogFile.getParent(), entry -> {
+                if (!project.items.contains(entry)) project.items.add(entry); selectedGroup = ""; refreshing = true; search.setText(""); refreshing = false;
+                rebuildGroupTabs(); refreshList(entry); changed();
+            }).setVisible(true);
+        }
+        private String[] textureSlots() {
+            if (current == null) return new String[0]; var type = project.type(current);
+            if (type.block() && current.existing) return new String[0];
+            if (type.block()) return new String[]{"top", "bottom", "side", "front", "back"};
+            if (type.model().equals("bow")) return new String[]{"pulling_0", "pulling_1", "pulling_2"};
+            if (type.model().equals("crossbow")) return new String[]{"pulling_0", "pulling_1", "pulling_2", "arrow", "firework"};
+            return current.type.equals("itemcontent:armor") ? new String[]{"armor_layer_1", "armor_layer_2"} : new String[0];
+        }
+        private void textures() throws Exception {
+            if (current == null) return; Map<String, String> values = new LinkedHashMap<>(current.textures);
+            JPanel form = new JPanel(new GridLayout(0, 1, 0, 10));
+            for (String slot : textureSlots()) {
+                String title = switch (slot) { case "top" -> "Верх"; case "bottom" -> "Низ"; case "side" -> "Боковые стороны"; case "front" -> "Передняя сторона"; case "back" -> "Задняя сторона"; case "armor_layer_1" -> "Броня: слой 1"; case "armor_layer_2" -> "Броня: слой 2"; case "arrow" -> "Заряжен стрелой"; case "firework" -> "Заряжен фейерверком"; default -> "Натяжение: " + slot.substring(slot.length() - 1); };
+                JPanel row = new JPanel(new BorderLayout(8, 0)); JLabel path = new JLabel(values.containsKey(slot) ? Path.of(values.get(slot)).getFileName().toString() : "Основная текстура");
+                JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0)); JButton choose = new JButton("PNG…"), clear = new JButton("Сбросить"); buttons.add(choose); buttons.add(clear);
+                row.add(new JLabel(title), BorderLayout.WEST); row.add(path, BorderLayout.CENTER); row.add(buttons, BorderLayout.EAST); form.add(row);
+                choose.addActionListener(e -> guarded(() -> { JFileChooser file = chooser("Выберите PNG: " + title, false); file.setFileFilter(new FileNameExtensionFilter("PNG", "png")); if (file.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) { ItemProject.validatePng(file.getSelectedFile().toPath()); values.put(slot, file.getSelectedFile().getAbsolutePath()); path.setText(file.getSelectedFile().getName()); } }));
+                clear.addActionListener(e -> { values.remove(slot); path.setText("Основная текстура"); });
+            }
+            if (JOptionPane.showConfirmDialog(this, form, "Дополнительные текстуры", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) == JOptionPane.OK_OPTION) { current.textures = values; changed(); }
         }
         private JFileChooser chooser(String title, boolean directories) {
             JFileChooser chooser = new JFileChooser(document == null ? null : document.toAbsolutePath().getParent().toFile());

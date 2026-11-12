@@ -1,0 +1,144 @@
+{
+  "version": 2,
+  "groups": [
+    {
+      "id": "itemcontent:test_group",
+      "name": "Integration test"
+    }
+  ],
+  "items": [
+    {
+      "id": "itemcontent:item",
+      "name": "item",
+      "type": "itemcontent:item",
+      "properties": {},
+      "group": "itemcontent:test_group"
+    },
+    {
+      "id": "itemcontent:food",
+      "name": "food",
+      "type": "itemcontent:food",
+      "properties": {
+        "hunger": 8
+      },
+      "group": "itemcontent:test_group"
+    },
+    {
+      "id": "itemcontent:sword",
+      "name": "sword",
+      "type": "itemcontent:sword",
+      "properties": {
+        "durability": 750,
+        "attack_damage": 9,
+        "attack_speed": 2.5
+      },
+      "group": "itemcontent:test_group"
+    },
+    {
+      "id": "itemcontent:pickaxe",
+      "name": "pickaxe",
+      "type": "itemcontent:pickaxe",
+      "properties": {},
+      "group": "itemcontent:test_group"
+    },
+    {
+      "id": "itemcontent:axe",
+      "name": "axe",
+      "type": "itemcontent:axe",
+      "properties": {},
+      "group": "itemcontent:test_group"
+    },
+    {
+      "id": "itemcontent:shovel",
+      "name": "shovel",
+      "type": "itemcontent:shovel",
+      "properties": {},
+      "group": "itemcontent:test_group"
+    },
+    {
+      "id": "itemcontent:hoe",
+      "name": "hoe",
+      "type": "itemcontent:hoe",
+      "properties": {},
+      "group": "itemcontent:test_group"
+    },
+    {
+      "id": "itemcontent:bow",
+      "name": "bow",
+      "type": "itemcontent:bow",
+      "properties": {
+        "draw_ticks": 10
+      },
+      "group": "itemcontent:test_group"
+    },
+    {
+      "id": "itemcontent:crossbow",
+      "name": "crossbow",
+      "type": "itemcontent:crossbow",
+      "properties": {},
+      "group": "itemcontent:test_group"
+    },
+    {
+      "id": "itemcontent:armor",
+      "name": "armor",
+      "type": "itemcontent:armor",
+      "properties": {
+        "slot": "helmet",
+        "protection": 4,
+        "durability": 321
+      },
+      "group": "itemcontent:test_group"
+    },
+    {
+      "id": "itemcontent:block",
+      "name": "block",
+      "type": "itemcontent:block",
+      "properties": {
+        "mining_level": 2
+      },
+      "group": "itemcontent:test_group"
+    },
+    {
+      "id": "itemcontent:decorative_chest",
+      "name": "decorative_chest",
+      "type": "itemcontent:decorative_chest",
+      "properties": {},
+      "group": "itemcontent:test_group"
+    },
+    {
+      "id": "itemcontent:decorative_furnace",
+      "name": "decorative_furnace",
+      "type": "itemcontent:decorative_furnace",
+      "properties": {},
+      "group": "itemcontent:test_group"
+    },
+    {
+      "id": "itemcontent:launcher",
+      "name": "Test provider item",
+      "type": "testcontent:launcher",
+      "properties": {
+        "fire_rate": 12.5
+      }
+    },
+    {
+      "id": "testcontent:original",
+      "name": "Existing provider",
+      "type": "testcontent:launcher",
+      "existing": true,
+      "group": "itemcontent:keep",
+      "properties": {
+        "fire_rate": 13
+      }
+    },
+    {
+      "id": "minecraft:golden_apple",
+      "name": "Modified golden apple",
+      "type": "itemcontent:food",
+      "existing": true,
+      "group": "itemcontent:test_group",
+      "properties": {
+        "hunger": 9
+      }
+    }
+  ]
+}

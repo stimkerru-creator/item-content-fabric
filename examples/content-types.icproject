@@ -1,0 +1,89 @@
+{
+  "editorVersion": 2,
+  "items": [
+    {
+      "id": "itemcontent:bronze_ingot",
+      "name": "Бронзовый слиток",
+      "type": "itemcontent:item",
+      "appearance": "minecraft:copper_ingot",
+      "group": "minecraft:ingredients",
+      "maxCount": 64,
+      "properties": {}
+    },
+    {
+      "id": "itemcontent:bronze_sword",
+      "name": "Бронзовый меч",
+      "type": "itemcontent:sword",
+      "appearance": "minecraft:iron_sword",
+      "group": "minecraft:combat",
+      "maxCount": 1,
+      "properties": {
+        "durability": 750,
+        "attack_damage": 9,
+        "attack_speed": 2.5
+      }
+    },
+    {
+      "id": "itemcontent:fast_bow",
+      "name": "Быстрый лук",
+      "type": "itemcontent:bow",
+      "appearance": "minecraft:bow",
+      "group": "minecraft:combat",
+      "maxCount": 1,
+      "properties": {
+        "draw_ticks": 10
+      }
+    },
+    {
+      "id": "itemcontent:hearty_food",
+      "name": "Сытная еда",
+      "type": "itemcontent:food",
+      "appearance": "minecraft:bread",
+      "group": "minecraft:food_and_drinks",
+      "maxCount": 64,
+      "properties": {
+        "hunger": 8,
+        "saturation": 0.6
+      }
+    },
+    {
+      "id": "itemcontent:rough_cobblestone",
+      "name": "Грубый булыжник",
+      "type": "itemcontent:block",
+      "appearance": "minecraft:cobblestone",
+      "group": "minecraft:building_blocks",
+      "maxCount": 64,
+      "properties": {
+        "hardness": 2,
+        "resistance": 6,
+        "mining_level": 1
+      }
+    },
+    {
+      "id": "itemcontent:bronze_chest",
+      "name": "Декоративный бронзовый сундук",
+      "type": "itemcontent:decorative_chest",
+      "appearance": "minecraft:copper_block",
+      "group": "minecraft:functional_blocks",
+      "maxCount": 64,
+      "properties": {
+        "hardness": 2.5,
+        "sound": "metal"
+      }
+    },
+    {
+      "id": "itemcontent:decorative_furnace",
+      "name": "Декоративная печь",
+      "type": "itemcontent:decorative_furnace",
+      "appearance": "minecraft:furnace",
+      "group": "minecraft:functional_blocks",
+      "maxCount": 64,
+      "properties": {
+        "hardness": 3.5,
+        "mining_level": 1
+      }
+    }
+  ],
+  "types": [],
+  "groups": []
+}

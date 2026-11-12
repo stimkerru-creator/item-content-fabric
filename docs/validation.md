@@ -1,5 +1,39 @@
 # Validation record
 
+## 1.2.0 — 2026-11-12
+
+Local environment: Windows, Minecraft 1.20.1, Fabric Loader 0.15.11, Fabric API 0.92.2+1.20.1.
+Local JDK 21 compiles with `--release 17`; GitHub Actions independently builds on Java 17.
+
+- `gradlew build`: **13 tests**, zero failures. Legacy configuration/API, typed parsing, optional provider,
+  strict fields/ranges, real desktop export and the expanded example are covered.
+- `gradlew -p editor build`: **30 tests**, zero failures. Schemas/defaults, unknown types/fields,
+  addon forms, copy/override semantics, block/bow/crossbow/armor resources, mining tags,
+  atomic export, legacy backups, independent edits and layout are covered.
+- Desktop tests also pass at FlatLaf UI scales **1.25 and 1.5**.
+- `runIntegrationServer`: **28 real-game checks PASS**. Native item classes; total damage 9,
+  attack speed 2.5, durability 750; native food and armor; preserving original food effects;
+  existing registry object identity; provider factory/inspector/editing; three placed block types;
+  required-tool tags; new and moved existing creative-tab entries.
+- `runIntegrationClient`: **PASS**. Catalog **1269 items / 12 category tabs / 1059 PNG icons**;
+  diamond-sword native inspection and repair material; addon type and fire_rate;
+  six block/item models are not the missing model.
+- Initial full catalog generation took **4515 ms** in this run, including resource reads and disk I/O.
+  The filesystem/resource part runs in a background job. This is a whole-catalog startup/export
+  measurement, not a per-item gameplay cost or benchmark of all modpacks.
+- Visually inspected editor appearance/behavior and real catalog browser at normal and compact sizes.
+  No forced input heights; behavior reflows into two columns at wide sizes.
+
+Reproduction: [development instructions](development.md). The test-only provider is in `integration-test`;
+its code and editor/FlatLaf classes are excluded from the released Minecraft JAR.
+The isolated client uses dev/offline authentication; an authentication warning is expected there.
+Windows performance-counter and existing Minecraft renderer warnings were present; no Item Content
+model-load errors were reported in the tested run.
+
+Earlier coexistence verification below concerns version 1.1.1 with Item Parameters. Version 1.2.0
+was tested standalone with its optional test provider; a broad modpack compatibility test is not claimed.
+
+
 ## 1.1.1 — 2026-11-12
 
 - Numeric characteristics removed from editor, item model and export; catalog generation removed.

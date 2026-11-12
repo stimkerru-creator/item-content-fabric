@@ -135,13 +135,13 @@ class EditorPanelTest {
 
     private void assertTextHeight(Container parent) {
         for (Component child : parent.getComponents()) {
-            if (child instanceof JTextField field) {
+            if (child.isVisible() && child instanceof JTextField field) {
                 Insets insets = field.getInsets();
                 int interior = field.getHeight() - insets.top - insets.bottom;
                 assertTrue(interior >= field.getFontMetrics(field.getFont()).getHeight(),
                         field.getName() + ": interior=" + interior + ", font=" + field.getFontMetrics(field.getFont()).getHeight());
             }
-            if (child instanceof Container container) assertTextHeight(container);
+            if (child.isVisible() && child instanceof Container container) assertTextHeight(container);
         }
     }
 

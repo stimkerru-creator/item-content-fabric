@@ -3,6 +3,8 @@ package dev.itemcontent.config;
 import com.google.gson.*;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.util.Identifier;
+import dev.itemcontent.api.ContentTypeRegistry;
+import dev.itemcontent.definition.*;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -19,35 +21,53 @@ public final class ItemContentConfig {
         return FabricLoader.getInstance().getConfigDir().resolve("item-content/items.json");
     }
 
-    public static List<ItemSpec> load() throws IOException {
+    public record Group(String id, String name, String icon) {
+        public Group { Identifiers.check(id); Identifiers.check(icon); if ((!id.startsWith("itemcontent:") || id.equals("itemcontent:keep")) || name == null || name.isBlank() || name.length() > 128) throw new IllegalArgumentException("Invalid creative group"); }
+    }
+    public record Document(List<ItemSpec> items, List<Group> groups) {}
+    public static List<ItemSpec> load() throws IOException { return loadDocument().items(); }
+    public static Document loadDocument() throws IOException {
         Path file = path();
         Files.createDirectories(file.getParent());
         if (Files.notExists(file)) {
             Files.writeString(file, "{\n  \"version\": 1,\n  \"items\": []\n}\n",
                     StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW);
-            return List.of();
+            return new Document(List.of(), List.of());
         }
         if (Files.size(file) > MAX_BYTES) throw new IOException("Configuration exceeds 4 MiB");
-        return parse(Files.readString(file, StandardCharsets.UTF_8));
+        return parseDocument(Files.readString(file, StandardCharsets.UTF_8));
     }
 
     /** Also used to check editor exports against the actual runtime format. */
-    public static List<ItemSpec> parse(String source) throws IOException {
+    public static List<ItemSpec> parse(String source) throws IOException { return parseDocument(source).items(); }
+    public static Document parseDocument(String source) throws IOException {
         if (source == null) throw new IOException("Configuration is null");
         if (source.getBytes(StandardCharsets.UTF_8).length > MAX_BYTES)
             throw new IOException("Configuration exceeds 4 MiB");
         try {
             JsonObject root = JsonParser.parseString(source).getAsJsonObject();
-            allow(root, "version", "items");
-            if (integer(root, "version", 0) != 1) throw new IOException("Unsupported configuration version");
+            allow(root, "version", "items", "groups");
+            int version = integer(root, "version", 0);
+            if (version != 1 && version != 2) throw new IOException("Unsupported configuration version");
             JsonArray items = root.getAsJsonArray("items");
             if (items == null) throw new IOException("items must be array");
             if (items.size() > MAX_ITEMS) throw new IOException("Too many items");
+            List<Group> groups = new ArrayList<>();
+            Set<String> groupIds = new HashSet<>();
+            if (root.has("groups")) {
+                if (!root.get("groups").isJsonArray() || root.getAsJsonArray("groups").size() > 256) throw new IOException("groups: до 256 вкладок");
+                for (var value : root.getAsJsonArray("groups")) {
+                    var group = value.getAsJsonObject(); allow(group, "id", "name", "icon");
+                    Group definition = new Group(required(group, "id"), required(group, "name"), group.has("icon") ? required(group, "icon") : "minecraft:brick");
+                    if (!groupIds.add(definition.id())) throw new IOException("Повтор вкладки: " + definition.id());
+                    groups.add(definition);
+                }
+            }
             List<ItemSpec> result = new ArrayList<>();
             Set<Identifier> ids = new HashSet<>();
             for (JsonElement element : items) {
                 JsonObject item = element.getAsJsonObject();
-                allow(item, "id", "name", "appearance", "custom_model", "max_count", "fireproof", "fields");
+                allow(item, "id", "name", "appearance", "custom_model", "max_count", "fireproof", "fields", "type", "group", "existing", "properties");
                 Identifier id = identifier(required(item, "id"));
                 if (!ids.add(id)) throw new IOException("Duplicate ID: " + id);
                 Identifier appearance = new Identifier(item.has("appearance") ? required(item, "appearance") : "minecraft:iron_ingot");
@@ -58,10 +78,20 @@ public final class ItemContentConfig {
                     if (!legacy.isEmpty()) org.slf4j.LoggerFactory.getLogger("itemcontent").warn(
                             "{}: legacy fields are ignored. Item Content only registers items; the source file is unchanged.", id);
                 }
+                boolean existing = flag(item, "existing");
+                String typeId = item.has("type") ? required(item, "type") : "itemcontent:item";
+                var type = ContentTypeRegistry.getInstance().definition(typeId);
+                JsonObject properties = item.has("properties") ? item.getAsJsonObject("properties") : new JsonObject();
+                properties = type.validate(properties, existing);
+                boolean single = properties.has("durability") && properties.get("durability").getAsInt() > 0;
                 result.add(new ItemSpec(id, required(item, "name"), appearance,
-                        flag(item, "custom_model"), integer(item, "max_count", 64), flag(item, "fireproof")));
+                        flag(item, "custom_model"), integer(item, "max_count", single ? 1 : 64), flag(item, "fireproof"),
+                        typeId, item.has("group") ? required(item, "group") : type.defaultGroup(), existing, properties));
             }
-            return List.copyOf(result);
+            Map<String,String> modelAliases = new LinkedHashMap<>();
+            for (var spec : result) if (!spec.customModel() && !ContentTypeRegistry.getInstance().definition(spec.type()).model().equals("chest") && !(spec.existing() && spec.id().equals(spec.appearance()))) modelAliases.put(spec.id().toString(),spec.appearance().toString());
+            ModelReferences.validate(modelAliases);
+            return new Document(List.copyOf(result), List.copyOf(groups));
         } catch (RuntimeException failure) {
             throw new IOException("Invalid item definition: " + failure.getMessage(), failure);
         }

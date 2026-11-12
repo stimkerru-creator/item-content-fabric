@@ -3,9 +3,24 @@
   "id": "itemcontent",
   "version": "${version}",
   "name": "Item Content",
-  "description": "Server-authoritative configurable item registrations for Minecraft 1.20.1",
+  "description": "Configurable native items, blocks and optional behavior providers for Minecraft 1.20.1",
   "environment": "*",
   "license": "MIT",
-  "entrypoints": { "main": ["dev.itemcontent.ItemContentMod"], "client": ["dev.itemcontent.ItemContentClient"] },
-  "depends": { "fabricloader": ">=0.15.11", "minecraft": "1.20.1", "java": ">=17", "fabric-api": "*" }
+  "entrypoints": {
+    "main": [
+      "dev.itemcontent.ItemContentMod"
+    ],
+    "client": [
+      "dev.itemcontent.ItemContentClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.15.11",
+    "minecraft": "1.20.1",
+    "java": ">=17",
+    "fabric-api": "*"
+  },
+  "mixins": [
+    "itemcontent.mixins.json"
+  ]
 }

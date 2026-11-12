@@ -27,7 +27,7 @@ class ItemProjectTest {
     @Test void exportProducesConfigWithNoRecipesOrDuplicatedParameterCatalog() throws Exception {
         var project = project(); Path target = temp.resolve("export"); project.export(target);
         JsonObject root = JsonParser.parseString(Files.readString(target.resolve("config/item-content/items.json"))).getAsJsonObject();
-        assertEquals(1, root.get("version").getAsInt());
+        assertEquals(2, root.get("version").getAsInt());
         assertEquals("itemcontent:steel_plate", root.getAsJsonArray("items").get(0).getAsJsonObject().get("id").getAsString());
         assertFalse(root.getAsJsonArray("items").get(0).getAsJsonObject().has("fields"));
         assertFalse(Files.exists(target.resolve("config/itemparams"))); assertFalse(root.has("recipes"));

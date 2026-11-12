@@ -23,3 +23,5 @@ tasks.named('jar') {
     from('licenses/gson-LICENSE.txt') { into 'META-INF/licenses'; rename { 'Apache-2.0.txt' } }
     exclude 'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA', 'module-info.class'
 }
+
+sourceSets.main.java.srcDir '../common/src/main/java'

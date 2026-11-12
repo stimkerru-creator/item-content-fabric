@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.0
+
+- Add native food, weapons, tools, armor and placeable decorative blocks.
+- Generate item, bow/crossbow, armor and block resources and mining datapacks.
+- Add a real-game catalog with creative tabs, icons and declared editable properties.
+- Support explicit existing-item overrides without replacing registry objects.
+- Add optional typed providers via itemcontent:extensions; no mandatory third-party mod integration.
+- Extend the desktop editor with class/subtype selection, behavior forms and creative-tab movement.
+- Keep version 1 documents/configs readable; export version 2.
+- Add isolated Fabric server/client integration fixtures, schema/export/UI tests and examples.
+
 ## 1.1.1
 
 - Remove custom numeric characteristics from item definitions, the editor and exports.

@@ -33,6 +33,7 @@ jobs:
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
       - run: ./gradlew build --no-daemon
+      - run: ./gradlew runIntegrationServer --no-daemon -PacceptMinecraftEula=true
       - run: ./gradlew -p editor build --no-daemon
       - run: python3 tools/package-release.py
       - uses: actions/upload-artifact@v4

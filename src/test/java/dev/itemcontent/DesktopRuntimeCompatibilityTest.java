@@ -23,6 +23,19 @@ class DesktopRuntimeCompatibilityTest {
         var config = JsonParser.parseString(Files.readString(temp.resolve("export/config/item-content/items.json"))).getAsJsonObject();
         assertFalse(config.getAsJsonArray("items").get(0).getAsJsonObject().has("fields"));
     }
+    @Test void expandedShippedExampleExportsAllTypesToTheRuntimeLoader() throws Exception {
+        var project = ItemProject.load(Path.of("examples/content-types.icproject")); project.export(temp.resolve("typed-example"));
+        var document = ItemContentConfig.parseDocument(Files.readString(temp.resolve("typed-example/config/item-content/items.json")));
+        assertEquals(7,document.items().size());
+        assertTrue(document.items().stream().anyMatch(item -> item.type().equals("itemcontent:decorative_chest")));
+        assertTrue(Files.exists(temp.resolve("typed-example/datapacks/item-content/data/minecraft/tags/blocks/needs_stone_tool.json")));
+    }
+    @Test void originalPublicConstructorAndItemMapSignatureRemainAvailable() throws Exception {
+        var spec = new dev.itemcontent.config.ItemSpec(new net.minecraft.util.Identifier("itemcontent:old"),"Old",new net.minecraft.util.Identifier("minecraft:iron_ingot"),false,64,false);
+        assertEquals("itemcontent:item",spec.type());
+        assertTrue(ItemContentMod.class.getMethod("items").getGenericReturnType().getTypeName().contains("ConfiguredItem"));
+        assertNotNull(ItemContentMod.class.getMethod("registeredItems"));
+    }
     @Test void fabricManifestDoesNotRequireEitherOtherMod() throws Exception {
         var manifest = JsonParser.parseString(Files.readString(Path.of("src/main/resources/fabric.mod.json"))).getAsJsonObject();
         assertEquals(java.util.Set.of("fabricloader", "minecraft", "java", "fabric-api"), manifest.getAsJsonObject("depends").keySet());

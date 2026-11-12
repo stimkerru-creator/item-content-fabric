@@ -15,6 +15,9 @@ with ZipFile(mod) as jar:
     assert set(metadata["depends"]) == {"fabricloader", "minecraft", "java", "fabric-api"}
     assert "dev/itemcontent/config/ParameterCatalogWriter.class" not in jar.namelist()
     assert not any(name.startswith("dev/itemparams/") for name in jar.namelist())
+    assert not any(name.startswith("dev/itemcontent/integration/") for name in jar.namelist()), "Test fixture leaked into mod"
+    assert "dev/itemcontent/api/ItemContentExtension.class" in jar.namelist()
+    assert "dev/itemcontent/definition/TypeDefinition.class" in jar.namelist()
     assert "LICENSE-item-content.txt" in jar.namelist(), "Missing mod license"
     assert not any(name.startswith(("dev/itemcontent/editor/", "com/formdev/")) for name in jar.namelist()), "Editor or FlatLaf leaked into mod"
     assert int.from_bytes(jar.read("dev/itemcontent/ItemContentMod.class")[6:8], "big") == 61
