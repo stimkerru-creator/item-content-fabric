@@ -2,6 +2,10 @@
 
 ## 1.2.0
 
+- Clarify editor sections and use a custom PNG by default for new items.
+- Select borrowed appearance from the game catalog instead of typing arbitrary IDs.
+- Add explicit game-folder installation with backup/rollback; retain portable export.
+
 - Add native food, weapons, tools, armor and placeable decorative blocks.
 - Generate item, bow/crossbow, armor and block resources and mining datapacks.
 - Add a real-game catalog with creative tabs, icons and declared editable properties.

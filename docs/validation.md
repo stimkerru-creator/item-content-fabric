@@ -2,6 +2,22 @@
 
 ## 1.2.0 — 2026-11-12
 
+### Editor clarity and installation update
+
+- Desktop suite: **37 tests**, zero failures. New regression checks cover appearance-mode isolation,
+  read-only catalog selection, and hiding the inactive PNG preview.
+- Installation uses temporary test games/worlds: first install, custom creative groups, preserving catalog/other mods,
+  backing up the previous config/resource pack/mod, restoring files after a failed write,
+  requiring a world for mining data, rejecting a resourcepacks folder as the game root,
+  and reporting the item name when its PNG is missing before writing any game files.
+- Desktop tests pass at UI scales **1, 1.25 and 1.5**. The appearance modes, game-property tab
+  and installation dialog were also visually inspected; main-window previews use 1280×700 frames.
+- Installation was not applied to a user game or world. Minecraft runtime code is unchanged in this update;
+  the real-game checks listed below are the earlier 1.2.0 validation, not a new game run.
+
+
+### Initial 1.2.0 type and runtime checks
+
 Local environment: Windows, Minecraft 1.20.1, Fabric Loader 0.15.11, Fabric API 0.92.2+1.20.1.
 Local JDK 21 compiles with `--release 17`; GitHub Actions independently builds on Java 17.
 

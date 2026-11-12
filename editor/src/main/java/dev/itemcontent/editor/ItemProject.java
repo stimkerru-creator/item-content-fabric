@@ -130,9 +130,18 @@ public final class ItemProject {
             return result;
         } catch (RuntimeException e) { throw new IOException("Не удалось открыть список предметов: " + e.getMessage(), e); }
     }
+    void validateForExport() throws IOException {
+        validate();
+        for (Entry item:items) if (item.customModel) {
+            boolean available=false;
+            try { available=item.texture!=null && !item.texture.isBlank() && Files.isRegularFile(Path.of(item.texture)); }
+            catch (InvalidPathException ignored) { }
+            if (!available) throw new IOException("Добавьте PNG-текстуру для «"+item.name+"» во вкладке «Название и внешний вид».");
+        }
+    }
     /** Exports to a new/empty folder without overwriting user files. */
     public void export(Path target) throws IOException {
-        validate();
+        validateForExport();
         Path path = target.toAbsolutePath().normalize();
         for (Path p = path; p != null; p = p.getParent())
             if (Files.isSymbolicLink(p)) throw new IOException("Выберите папку без символических ссылок.");

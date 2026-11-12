@@ -85,6 +85,24 @@ class EditorPanelTest {
         assertEquals("minecraft:gold_ingot", loaded.items.get(0).appearance); assertEquals("Шарнир", loaded.items.get(1).name);
     }
 
+    @Test void choosingAppearanceDoesNotChangeTheItemTypeOrProperties() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            var panel=new ItemContentEditor.EditorPanel();
+            ((JComboBox<?>) find(panel,"typeCategory")).setSelectedItem("Оружие");
+            var attack=(JTextField)find(panel,"behavior.attack_damage"); attack.setText("12");
+            assertTrue(((JRadioButton)find(panel,"ownTextureMode")).isSelected());
+            assertFalse(find(panel,"gameAppearanceSource").isVisible());
+            ((JRadioButton)find(panel,"gameAppearanceMode")).doClick();
+            assertTrue(find(panel,"gameAppearanceSource").isVisible());
+            assertFalse(((JTextField)find(panel,"appearance")).isEditable());
+            assertEquals("Меч",((JComboBox<?>)find(panel,"itemType")).getSelectedItem().toString());
+            assertEquals("12",attack.getText());
+            ((JRadioButton)find(panel,"ownTextureMode")).doClick();
+            assertFalse(find(panel,"gameAppearanceSource").isVisible());
+            assertEquals("12",attack.getText());
+        });
+    }
+
     @Test void initialWindowFitsTheAvailableSmallDesktop() {
         Dimension size = ItemContentEditor.windowSize(new Rectangle(0, 0, 1366, 728));
         assertTrue(size.width < 1366); assertTrue(size.height < 728);
@@ -121,6 +139,12 @@ class EditorPanelTest {
                 assertEquals(Color.BLUE.getRGB(), rendered.getRGB(115, 140));
                 assertNotEquals(Color.RED.getRGB(), rendered.getRGB(115, 30));
                 assertFalse(((JTextField) find(panel, "appearance")).isEnabled());
+                ((JRadioButton)find(panel,"gameAppearanceMode")).doClick();
+                output=rendered.createGraphics(); preview.paint(output); output.dispose();
+                assertNotEquals(Color.RED.getRGB(), rendered.getRGB(115,90), "Inactive PNG must not be shown as the selected game appearance");
+                ((JRadioButton)find(panel,"ownTextureMode")).doClick();
+                output=rendered.createGraphics(); preview.paint(output); output.dispose();
+                assertEquals(Color.RED.getRGB(),rendered.getRGB(115,90));
             } catch (Exception failure) { throw new RuntimeException(failure); }
         });
     }

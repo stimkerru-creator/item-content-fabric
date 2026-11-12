@@ -79,7 +79,7 @@ public final class ItemContentEditor {
         private final DefaultListModel<ItemProject.Entry> listModel = new DefaultListModel<>();
         private final JList<ItemProject.Entry> list = new JList<>(listModel);
         private final JTextField name = new JTextField(), id = new JTextField(), appearance = new JTextField(), search = new JTextField();
-        private final JRadioButton custom = new JRadioButton("Своя PNG"), existing = new JRadioButton("Модель", true);
+        private final JRadioButton custom = new JRadioButton("Своя текстура (PNG)"), existing = new JRadioButton("Готовый вид из игры", true);
         private final JCheckBox fireproof = new JCheckBox("Не сгорает в огне и лаве");
         private final JSpinner maxCount = new JSpinner(new SpinnerNumberModel(64, 1, 99, 1));
         private final ImagePreview preview = new ImagePreview();
@@ -99,9 +99,11 @@ public final class ItemContentEditor {
         private String selectedGroup = "";
         private GameCatalog catalog;
         private Path catalogFile;
-        private final JButton textureOptions = new JButton("Дополнительные текстуры…");
+        private final JButton textureOptions = new JButton("Другие текстуры…");
         private record GroupChoice(String id, String name) { @Override public String toString() { return name; } }
-        private final JButton choosePng = new JButton("Выбрать картинку…");
+        private final JButton choosePng = new JButton("Выбрать свою текстуру…");
+        private final JButton chooseGameAppearance = new JButton("Выбрать из игры…");
+        private final JPanel appearanceActions=panel(new CardLayout());
         private JButton removeButton, duplicateButton;
         private boolean refreshing, dirty;
         private Path document;
@@ -111,8 +113,8 @@ public final class ItemContentEditor {
             super(new BorderLayout()); setBackground(BACKGROUND);
             add(header(), BorderLayout.NORTH);
             JPanel body = panel(new BorderLayout(20, 0)); body.setBorder(padding(20, 24, 16, 24));
-            JPanel categoryBar = panel(new BorderLayout(8, 0)); groupTabs.setName("creativeTabs"); groupTabs.setPreferredSize(new Dimension(400, 42));
-            categoryBar.add(groupTabs, BorderLayout.CENTER); JButton newGroup = new JButton("+ Вкладка"); newGroup.setName("addGroup"); newGroup.addActionListener(e -> guarded(this::addGroup)); categoryBar.add(newGroup, BorderLayout.EAST);
+            JPanel categoryBar = panel(new BorderLayout(8, 0)); groupTabs.setName("creativeTabs"); groupTabs.setToolTipText("Фильтр вашего списка. Где предмет появится в игре, выбирается справа: «Вкладка в креативе»."); groupTabs.setPreferredSize(new Dimension(400, 42));
+            categoryBar.add(groupTabs, BorderLayout.CENTER); JButton newGroup = new JButton("+ Вкладка в игре"); newGroup.setName("addGroup"); newGroup.addActionListener(e -> guarded(this::addGroup)); categoryBar.add(newGroup, BorderLayout.EAST);
             body.add(categoryBar, BorderLayout.NORTH);
             body.add(sidebar(), BorderLayout.WEST); body.add(inspector(), BorderLayout.CENTER); add(body, BorderLayout.CENTER);
             JPanel footer = panel(new BorderLayout(16, 0)); footer.setBorder(padding(0, 26, 12, 26));
@@ -153,13 +155,14 @@ public final class ItemContentEditor {
             JButton file = button(actions, "Файл", "fileMenu", () -> {}); quiet(file);
             JPopupMenu menu = new JPopupMenu();
             menu(menu, "Открыть список предметов…", "openProject", this::open);
-            menu(menu, "Открыть каталог из Minecraft…", "openCatalog", this::openCatalog);
+            menu(menu, "Загрузить каталог предметов из игры…", "openCatalog", this::openCatalog);
+            menu(menu, "Экспортировать файлы для переноса…", "exportFiles", this::export);
             menu(menu, "Сохранить список как…", "saveAs", () -> saveAs()); menu.addSeparator();
             menu(menu, "Новый список предметов…", "newProject", () -> { if (mayDiscard()) reset(); });
             menu.addSeparator(); menu(menu, "Как пользоваться", "help", this::help);
             file.addActionListener(e -> menu.show(file, 0, file.getHeight()));
             button(actions, "Сохранить", "saveProject", () -> save());
-            JButton prepare = button(actions, "Подготовить для игры…", "export", this::export); primary(prepare);
+            JButton prepare = button(actions, "Установить в Minecraft…", "export", this::install); primary(prepare);
             bar.add(actions, BorderLayout.EAST); return bar;
         }
         private JPanel sidebar() {
@@ -175,7 +178,7 @@ public final class ItemContentEditor {
             list.setFixedCellHeight(68); list.setFixedCellWidth(216); list.setCellRenderer(new ItemCell());
             JScrollPane scroll = new JScrollPane(list); scroll.setBorder(BorderFactory.createEmptyBorder()); scroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
             side.add(scroll, BorderLayout.CENTER);
-            JButton browse = new JButton("Предметы из Minecraft…"); browse.setName("browseCatalog"); browse.addActionListener(e -> guarded(this::browseCatalog)); side.add(browse, BorderLayout.SOUTH);
+            JButton browse = new JButton("Каталог предметов игры…"); browse.setName("browseCatalog"); browse.addActionListener(e -> guarded(this::browseCatalog)); side.add(browse, BorderLayout.SOUTH);
             if (!GraphicsEnvironment.isHeadless()) list.setDragEnabled(true);
             list.setTransferHandler(new TransferHandler() {
                 @Override public int getSourceActions(JComponent component) { return COPY; }
@@ -193,30 +196,49 @@ public final class ItemContentEditor {
             heading.add(actions, BorderLayout.EAST); inspector.add(heading, BorderLayout.NORTH);
             JPanel editor = panel(new BorderLayout(0, 10)); JPanel selectors = panel(new GridLayout(1, 3, 12, 0));
             typeCategory.setName("typeCategory"); itemType.setName("itemType"); creativeGroup.setName("creativeGroup");
-            selectors.add(selector("Класс", typeCategory)); selectors.add(selector("Тип / подкласс", itemType)); selectors.add(selector("Вкладка креатива", creativeGroup)); editor.add(selectors, BorderLayout.NORTH);
-            JTabbedPane details = new JTabbedPane(); details.setName("detailsTabs"); details.addTab("Внешний вид", appearanceCard());
-            JScrollPane properties = new JScrollPane(behavior); properties.setBorder(BorderFactory.createEmptyBorder()); properties.getVerticalScrollBar().setUnitIncrement(22);
-            details.addTab("Игровое поведение", properties); editor.add(details, BorderLayout.CENTER);
+            selectors.add(selector("Категория", typeCategory)); selectors.add(selector("Тип предмета", itemType)); selectors.add(selector("Вкладка в креативе", creativeGroup)); editor.add(selectors, BorderLayout.NORTH);
+            JTabbedPane details = new JTabbedPane(); details.setName("detailsTabs"); details.addTab("Название и внешний вид", appearanceCard());
+            JPanel gameProperties=panel(new BorderLayout(0,0));
+            JPanel general=panel(new GridBagLayout()); general.setBorder(padding(16,18,0,18));
+            JPanel stackSettings=panel(new BorderLayout(16,0)); ((JSpinner.DefaultEditor) maxCount.getEditor()).getTextField().setColumns(3);
+            stackSettings.add(maxCount,BorderLayout.WEST); stackSettings.add(fireproof,BorderLayout.CENTER);
+            field(general,0,"Предметов в одном стаке",stackSettings,null);
+            gameProperties.add(general,BorderLayout.NORTH); gameProperties.add(behavior,BorderLayout.CENTER);
+            JScrollPane properties = new JScrollPane(gameProperties); properties.setBorder(BorderFactory.createEmptyBorder()); properties.getVerticalScrollBar().setUnitIncrement(22);
+            details.addTab("Свойства в игре", properties); editor.add(details, BorderLayout.CENTER);
             inspector.add(editor, BorderLayout.CENTER); return inspector;
         }
         private JComponent appearanceCard() {
             preview.setName("itemPreview");
             JPanel content = new JPanel(new GridBagLayout()); content.setBorder(padding(18, 18, 18, 18));
-            JPanel art = panel(new BorderLayout(0, 12)); art.setPreferredSize(new Dimension(230, 298));
-            JPanel modes = panel(new GridLayout(1, 2, 4, 0)); ButtonGroup group = new ButtonGroup(); group.add(existing); group.add(custom);
-            modes.add(existing); modes.add(custom); art.add(modes, BorderLayout.NORTH); art.add(preview, BorderLayout.CENTER);
-            JPanel controls = panel(new BorderLayout(0, 8)); choosePng.setName("choosePng"); controls.add(choosePng, BorderLayout.NORTH);
-            JPanel extra = panel(new BorderLayout(0, 6)); extra.add(texturePath, BorderLayout.NORTH); textureOptions.setName("textureOptions"); textureOptions.addActionListener(e -> guarded(this::textures)); extra.add(textureOptions, BorderLayout.CENTER);
-            controls.add(extra, BorderLayout.CENTER); controls.add(label("PNG с прозрачностью · например 32 × 32", 11, false, MUTED), BorderLayout.SOUTH); art.add(controls, BorderLayout.SOUTH);
+            JPanel art = panel(new BorderLayout(0, 12)); art.setPreferredSize(new Dimension(230, 260)); preview.setMinimumSize(new Dimension(160,100));
+            custom.setName("ownTextureMode"); existing.setName("gameAppearanceMode");
+            custom.setToolTipText("Оформить новый предмет своей PNG-текстурой.");
+            existing.setToolTipText("Использовать готовое оформление из игры. Игровые свойства не копируются.");
+            JPanel modes = panel(new GridLayout(0, 1, 0, 4)); ButtonGroup group = new ButtonGroup(); group.add(existing); group.add(custom);
+            modes.add(custom); modes.add(existing);
+            choosePng.setName("choosePng"); appearanceActions.add(choosePng,"png");
+            chooseGameAppearance.setName("pickGameAppearance"); chooseGameAppearance.addActionListener(e -> guarded(this::pickAppearance)); appearanceActions.add(chooseGameAppearance,"game");
+            JPanel artTop=panel(new BorderLayout(0,10)); artTop.add(modes,BorderLayout.NORTH); artTop.add(appearanceActions,BorderLayout.CENTER);
+            art.add(artTop,BorderLayout.NORTH); art.add(preview,BorderLayout.CENTER); art.add(texturePath,BorderLayout.SOUTH);
+            textureOptions.setName("textureOptions"); textureOptions.addActionListener(e -> guarded(this::textures));
             JPanel form = panel(new GridBagLayout());
             name.setName("itemName"); id.setName("itemId"); appearance.setName("appearance");
             field(form, 0, "Название в игре", name, null);
             JPanel address = panel(new BorderLayout(8, 0)); address.add(idPrefix, BorderLayout.WEST); address.add(id, BorderLayout.CENTER);
             field(form, 1, "ID предмета", address, "Строчные a–z, цифры и _. Например: steel_plate");
-            JPanel properties = panel(new BorderLayout(16, 0)); ((JSpinner.DefaultEditor) maxCount.getEditor()).getTextField().setColumns(3); properties.add(maxCount, BorderLayout.WEST); properties.add(fireproof, BorderLayout.CENTER);
-            field(form, 2, "Предметов в одном стаке", properties, null);
-            field(form, 3, "Модель существующего предмета", appearance, null);
-            appearance.setToolTipText("Например minecraft:iron_ingot. Для своей PNG это поле не используется.");
+
+            appearance.setEditable(false); appearance.setFocusable(false); appearance.setOpaque(false); appearance.setBorder(BorderFactory.createEmptyBorder(3,0,3,0));
+            field(form, 2, "Выбранный образец внешнего вида", appearance,
+                    "Меняется только оформление.<br>Игровые свойства задаются отдельно.");
+            appearance.getParent().setName("gameAppearanceSource");
+            GridBagConstraints extraConstraints=new GridBagConstraints(); extraConstraints.gridx=0; extraConstraints.gridy=3;
+            extraConstraints.anchor=GridBagConstraints.NORTHWEST; extraConstraints.insets=new Insets(10,0,0,0); form.add(textureOptions,extraConstraints);
+            appearance.setToolTipText("ID предмета, чьё оформление нужно использовать. Его урон, прочность и другие свойства не копируются.");
+            typeCategory.setToolTipText("Общая группа типов: оружие, еда, инструменты или блоки.");
+            itemType.setToolTipText("Определяет, что предмет умеет делать в игре: меч, лук, еда и другие типы.");
+            creativeGroup.setToolTipText("Где предмет появится в инвентаре творческого режима. Верхние вкладки фильтруют список слева.");
+            textureOptions.setToolTipText("Отдельные картинки для граней блока, кадров лука или надетой брони.");
             GridBagConstraints c = new GridBagConstraints(); c.gridx = 0; c.gridy = 0; c.anchor = GridBagConstraints.NORTH; c.fill = GridBagConstraints.BOTH; c.weighty = 1; content.add(art, c);
             c.gridx = 1; c.weightx = 1; c.insets = new Insets(0, 24, 0, 0); c.fill = GridBagConstraints.HORIZONTAL; content.add(form, c);
             JScrollPane scroll = new JScrollPane(content); scroll.setBorder(BorderFactory.createEmptyBorder()); scroll.getVerticalScrollBar().setUnitIncrement(18); scroll.setName("itemDetailsScroll"); return scroll;
@@ -335,6 +357,7 @@ public final class ItemContentEditor {
             int sequence = project.items.size() + 1;
             while (containsId("itemcontent:item_" + sequence)) sequence++;
             entry.id = "itemcontent:item_" + sequence; entry.name = "Предмет " + sequence;
+            entry.customModel = true;
             if (!selectedGroup.isEmpty()) entry.group = selectedGroup;
             project.items.add(entry);
             refreshing = true; search.setText(""); refreshing = false;
@@ -388,11 +411,24 @@ public final class ItemContentEditor {
         }
         private void updateImage() {
             appearance.setEnabled(current != null && !custom.isSelected() && !project.type(current).model().equals("chest") && !(current.existing && project.type(current).block())); choosePng.setEnabled(current != null);
-            preview.showImage(null, custom.isSelected() ? "Выберите PNG" : "Модель видна в игре");
-            texturePath.setText(current != null && project.type(current).model().equals("chest") && !custom.isSelected() ? "Форма сундука · доски дуба" : custom.isSelected() ? "Картинка ещё не выбрана" : "Внешний вид существующего предмета"); texturePath.setToolTipText(null);
+            ((CardLayout)appearanceActions.getLayout()).show(appearanceActions,custom.isSelected() ? "png" : "game");
+            appearanceActions.setVisible(current != null && (custom.isSelected() || appearance.isEnabled()));
+            chooseGameAppearance.setEnabled(current != null && appearance.isEnabled());
+            appearance.getParent().setVisible(current != null && !custom.isSelected() && appearance.isEnabled());
+            preview.showImage(null, custom.isSelected() ? "Выберите свою текстуру" : "Готовый вид из игры");
+            texturePath.setText(current != null && project.type(current).model().equals("chest") && !custom.isSelected() ? "Форма сундука · доски дуба" : custom.isSelected() ? "PNG ещё не выбрана" : "Свойства задаются отдельно"); texturePath.setToolTipText(null);
+            textureOptions.setVisible(current != null && textureSlots().length > 0);
             textureOptions.setEnabled(current != null && textureSlots().length > 0 && (custom.isSelected() || current.type.equals("itemcontent:armor")));
-            textureOptions.setToolTipText(custom.isSelected() || current != null && current.type.equals("itemcontent:armor") ? null : "Для отдельных кадров или граней сначала выберите основную PNG.");
-            if (selectedTexture != null && !selectedTexture.isBlank()) {
+            textureOptions.setToolTipText(custom.isSelected() || current != null && current.type.equals("itemcontent:armor") ? null : "Отдельные грани блока, кадры лука и текстуры брони. Для граней и кадров сначала выберите свою основную PNG.");
+            if (!custom.isSelected() && catalog!=null) {
+                catalog.items().stream().filter(item -> item.id().equals(appearance.getText()) && !item.icon().isBlank()).findFirst().ifPresent(item -> {
+                    try {
+                        Path root=catalogFile.getParent(), image=root.resolve(item.icon()).normalize();
+                        if (image.startsWith(root)) { ItemProject.validatePng(image); preview.showImage(ImageIO.read(image.toFile()), ""); texturePath.setText("Иконка выбранного образца"); }
+                    } catch (Exception ignored) { }
+                });
+            }
+            if (custom.isSelected() && selectedTexture != null && !selectedTexture.isBlank()) {
                 try {
                     Path path = Path.of(selectedTexture); ItemProject.validatePng(path);
                     BufferedImage image = ImageIO.read(path.toFile()); preview.showImage(image, "");
@@ -434,13 +470,17 @@ public final class ItemContentEditor {
             refreshList(project.items.get(0));
             document = path; dirty = false; status.setText(loaded.hasLegacyData() ? "Старые характеристики не используются. При сохранении будет создана резервная копия." : "Открыт список: " + path.getFileName()); status.setToolTipText(path.toString()); updateSaveState();
         }
+        private void install() {
+            commit(); project.validate();
+            new InstallationDialog(this, project).setVisible(true);
+        }
         private void export() {
             guarded(() -> {
-                commit(); project.validate(); JFileChooser chooser = chooser("Куда подготовить файлы для игры — новая или пустая папка", true);
+                commit(); project.validate(); JFileChooser chooser = chooser("Экспорт комплекта для переноса — выберите новую или пустую папку", true);
                 if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return;
                 Path target = chooser.getSelectedFile().toPath(); project.export(target);
                 status.setText("Подготовлено предметов: " + project.items.size() + ". Папка: " + target);
-                JOptionPane.showMessageDialog(this, "Готово: " + target + "\n\n"
+                JOptionPane.showMessageDialog(this, "Комплект экспортирован: " + target + "\nЭто ещё не установка в игру.\n\n"
                         + "1. config/item-content → в config сервера и каждого клиента.\n"
                         + "2. resourcepacks/item-content → в resourcepacks клиента; включите в игре.\n"
                         + "3. Перезапустите сервер и клиент.\n"
@@ -457,9 +497,11 @@ public final class ItemContentEditor {
         }
         private void help() {
             JOptionPane.showMessageDialog(this, "1. «Создать предмет» добавляет предмет в список слева.\n"
-                    + "2. Справа задайте название, внешний вид и свойства.\n"
-                    + "3. «Сохранить» запоминает весь список для дальнейшего редактирования.\n"
-                    + "4. «Подготовить для игры» создаёт настройки и картинки для Minecraft.\n\n"
+                    + "2. Выберите категорию и тип: меч, еда, обычный блок и другие.\n"
+                    + "3. В «Название и внешний вид» выберите свою PNG. Готовый вид из игры — необязательная альтернатива.\n"
+                    + "4. В «Свойства в игре» задайте урон, прочность или другие свойства выбранного типа.\n"
+                    + "5. «Сохранить» запоминает весь список для дальнейшего редактирования.\n"
+                    + "6. «Установить в Minecraft» записывает мод, настройки и текстуры в выбранную папку игры.\n\n"
                     + "Список предметов — ваши сохранённые настройки. Новый мод при этом не создаётся.\n"
                     + "Один мод Item Content загружает все подготовленные вами предметы.\n\n"
                     + "Подробная инструкция: docs/editor.md.", "Как создать предмет", JOptionPane.INFORMATION_MESSAGE);
@@ -494,15 +536,36 @@ public final class ItemContentEditor {
         private void addGroup() {
             JTextField title = new JTextField("Новая вкладка", 20), address = new JTextField("my_items", 20);
             JPanel form = new JPanel(new GridLayout(0,1,0,8)); form.add(new JLabel("Название вкладки")); form.add(title); form.add(new JLabel("ID после itemcontent: (латиница, цифры, _)")); form.add(address);
+            form.add(new JLabel("<html>Добавьте предметы в эту вкладку, установите настройки и перезапустите игру.<br>После этого она появится в творческом инвентаре Minecraft.</html>"));
             if (JOptionPane.showConfirmDialog(this, form, "Новая вкладка креатива", JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION) return;
             String key = "itemcontent:" + address.getText().trim(); Identifiers.check(key);
             if (groupNames().containsKey(key) || key.equals("itemcontent:keep") || title.getText().isBlank()) throw new IllegalArgumentException("Укажите уникальный ID и название вкладки");
             commit(); project.groups.add(new GameCatalog.Group(key, title.getText().trim())); rebuildGroupTabs(); showCurrent(); changed();
         }
         private void openCatalog() throws java.io.IOException {
-            JFileChooser chooser = chooser("Откройте config/item-content/catalog.json из вашей игры", false); chooser.setFileFilter(new FileNameExtensionFilter("Каталог игры (*.json)", "json"));
-            if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
-            loadCatalog(chooser.getSelectedFile().toPath()); browseCatalog();
+            if (chooseCatalog()) browseCatalog();
+        }
+        private boolean chooseCatalog() throws java.io.IOException {
+            JFileChooser chooser = chooser("Каталог из игры: config/item-content/catalog.json", false);
+            chooser.setFileFilter(new FileNameExtensionFilter("Каталог игры (*.json)", "json"));
+            Path folder = GameInstallation.defaultGameDirectory().resolve("config/item-content");
+            if (Files.isDirectory(folder)) chooser.setCurrentDirectory(folder.toFile());
+            chooser.setSelectedFile(folder.resolve("catalog.json").toFile());
+            chooser.setAccessory(new JLabel("<html>Сначала запустите Minecraft с Item Content.<br>Мод создаст catalog.json и картинки предметов<br>в config/item-content выбранной сборки.</html>"));
+            if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return false;
+            loadCatalog(chooser.getSelectedFile().toPath()); return true;
+        }
+        private void pickAppearance() throws java.io.IOException {
+            if (current == null || catalog == null && !chooseCatalog()) return;
+            commit();
+            boolean block = project.type(current).block();
+            CatalogDialog.appearance(this, project, catalog, catalogFile.getParent(), block, value -> {
+                String previous=current.appearance;
+                current.appearance=value;
+                try { project.validate(); }
+                catch (IllegalArgumentException failure) { current.appearance=previous; throw failure; }
+                appearance.setText(value); changed(); updateImage();
+            }).setVisible(true);
         }
         void loadCatalog(Path path) throws java.io.IOException {
             GameCatalog loaded = GameCatalog.load(path); commit(); project.importTypes(loaded); catalog = loaded; catalogFile = path.toAbsolutePath();
@@ -534,7 +597,7 @@ public final class ItemContentEditor {
                 choose.addActionListener(e -> guarded(() -> { JFileChooser file = chooser("Выберите PNG: " + title, false); file.setFileFilter(new FileNameExtensionFilter("PNG", "png")); if (file.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) { ItemProject.validatePng(file.getSelectedFile().toPath()); values.put(slot, file.getSelectedFile().getAbsolutePath()); path.setText(file.getSelectedFile().getName()); } }));
                 clear.addActionListener(e -> { values.remove(slot); path.setText("Основная текстура"); });
             }
-            if (JOptionPane.showConfirmDialog(this, form, "Дополнительные текстуры", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) == JOptionPane.OK_OPTION) { current.textures = values; changed(); }
+            if (JOptionPane.showConfirmDialog(this, form, "Другие текстуры", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) == JOptionPane.OK_OPTION) { current.textures = values; changed(); }
         }
         private JFileChooser chooser(String title, boolean directories) {
             JFileChooser chooser = new JFileChooser(document == null ? null : document.toAbsolutePath().getParent().toFile());

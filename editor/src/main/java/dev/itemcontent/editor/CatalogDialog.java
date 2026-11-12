@@ -21,6 +21,8 @@ final class CatalogDialog extends JDialog {
     };
     private final ItemProject project;
     private final Consumer<ItemProject.Entry> accept;
+    private final Consumer<String> appearanceAccept;
+    private final boolean blocksOnly;
     private final DefaultListModel<GameCatalog.Entry> model = new DefaultListModel<>();
     private final JList<GameCatalog.Entry> list = new JList<>(model);
     private final JTextField search = new JTextField(24);
@@ -29,8 +31,17 @@ final class CatalogDialog extends JDialog {
     private final JLabel title = new JLabel(), info = new JLabel();
     private final DefaultTableModel properties = new DefaultTableModel(new String[]{"Свойство", "Значение", "Изменение исходника"}, 0) { @Override public boolean isCellEditable(int r, int c) { return false; } };
     CatalogDialog(Component owner, ItemProject project, GameCatalog catalog, Path root, Consumer<ItemProject.Entry> accept) {
-        super(SwingUtilities.getWindowAncestor(owner), "Предметы из Minecraft", ModalityType.APPLICATION_MODAL);
+        this(owner, project, catalog, root, accept, null, false);
+    }
+    static CatalogDialog appearance(Component owner, ItemProject project, GameCatalog catalog, Path root,
+                                    boolean blocksOnly, Consumer<String> accept) {
+        return new CatalogDialog(owner, project, catalog, root, null, accept, blocksOnly);
+    }
+    private CatalogDialog(Component owner, ItemProject project, GameCatalog catalog, Path root,
+                          Consumer<ItemProject.Entry> accept, Consumer<String> appearanceAccept, boolean blocksOnly) {
+        super(SwingUtilities.getWindowAncestor(owner), appearanceAccept == null ? "Каталог предметов игры" : "Выбрать готовый внешний вид", ModalityType.APPLICATION_MODAL);
         this.project = project; this.catalog = catalog; this.root = root.toAbsolutePath().normalize(); this.accept = accept;
+        this.appearanceAccept = appearanceAccept; this.blocksOnly = blocksOnly;
         JPanel content = new JPanel(new BorderLayout(14, 14)); content.setBorder(BorderFactory.createEmptyBorder(16, 18, 16, 18)); setContentPane(content);
         JPanel top = new JPanel(new BorderLayout(0, 8)); search.putClientProperty("JTextField.placeholderText", "Поиск по названию, ID или моду"); top.add(search, BorderLayout.NORTH);
         groupIds.add(""); tabs.addTab("Все", new JPanel());
@@ -46,7 +57,7 @@ final class CatalogDialog extends JDialog {
             @Override protected Transferable createTransferable(JComponent c) { var item = list.getSelectedValue(); return item == null ? null : new StringSelection(item.id()); }
         });
         tabs.setTransferHandler(new TransferHandler() {
-            @Override public boolean canImport(TransferSupport support) { return support.isDrop() && support.isDataFlavorSupported(DataFlavor.stringFlavor); }
+            @Override public boolean canImport(TransferSupport support) { return appearanceAccept == null && support.isDrop() && support.isDataFlavorSupported(DataFlavor.stringFlavor); }
             @Override public boolean importData(TransferSupport support) {
                 if (!canImport(support)) return false;
                 try {
@@ -62,11 +73,11 @@ final class CatalogDialog extends JDialog {
             }
         });
         JPanel details = new JPanel(new BorderLayout(8, 10)); JPanel heading = new JPanel(new BorderLayout(0,6)); heading.add(title, BorderLayout.NORTH); heading.add(info, BorderLayout.CENTER); details.add(heading, BorderLayout.NORTH);
-        JTable table = new JTable(properties); table.setRowHeight(30); table.getColumnModel().getColumn(0).setPreferredWidth(270); table.getColumnModel().getColumn(1).setPreferredWidth(110); table.getColumnModel().getColumn(2).setPreferredWidth(230); details.add(new JScrollPane(table), BorderLayout.CENTER);
-        details.add(new JLabel("<html>Показаны свойства поддерживаемого типа. Чужие Java-поля не извлекаются автоматически.<br>Копия получает новый ID; специфическая механика, NBT-варианты и эффекты требуют поддержки типа.</html>"), BorderLayout.SOUTH);
+        JTable table = new JTable(properties); table.setRowHeight(30); table.getColumnModel().getColumn(0).setPreferredWidth(270); table.getColumnModel().getColumn(1).setPreferredWidth(110); table.getColumnModel().getColumn(2).setPreferredWidth(230); if (appearanceAccept == null) details.add(new JScrollPane(table), BorderLayout.CENTER);
+        details.add(new JLabel(appearanceAccept != null ? "<html>Выбирается только внешний вид.<br>Название, тип и игровые свойства вашего предмета сохранятся.</html>" : "<html>Показаны свойства поддерживаемого типа. Чужие Java-поля не извлекаются автоматически.<br>Копия получает новый ID; специфическая механика, NBT-варианты и эффекты требуют поддержки типа.</html>"), BorderLayout.SOUTH);
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, new JScrollPane(list), details); split.setResizeWeight(0.5); content.add(split, BorderLayout.CENTER);
-        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT)); JButton copy = new JButton("Создать новый на основе…"), edit = new JButton("Настроить существующий"), close = new JButton("Закрыть");
-        actions.add(copy); actions.add(edit); actions.add(close); content.add(actions, BorderLayout.SOUTH);
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT)); JButton copy = new JButton(appearanceAccept == null ? "Создать новый на основе…" : "Использовать этот внешний вид"), edit = new JButton("Настроить существующий"), close = new JButton("Закрыть");
+        actions.add(copy); if (appearanceAccept == null) actions.add(edit); actions.add(close); content.add(actions, BorderLayout.SOUTH);
         copy.addActionListener(e -> add(false)); edit.addActionListener(e -> add(true)); close.addActionListener(e -> dispose());
         search.getDocument().addDocumentListener(new DocumentListener() { public void insertUpdate(DocumentEvent e) { filter(); } public void removeUpdate(DocumentEvent e) { filter(); } public void changedUpdate(DocumentEvent e) { filter(); } });
         tabs.addChangeListener(e -> filter()); list.addListSelectionListener(e -> { if (!e.getValueIsAdjusting()) selected(); });
@@ -90,13 +101,13 @@ final class CatalogDialog extends JDialog {
     }
     private void filter() {
         String query = search.getText().trim().toLowerCase(Locale.ROOT), group = groupIds.get(Math.max(0, tabs.getSelectedIndex())); model.clear();
-        for (var item : catalog.items()) if ((group.isEmpty() || item.groups().contains(group)) && (item.name().toLowerCase(Locale.ROOT).contains(query) || item.id().contains(query))) model.addElement(item);
+        for (var item : catalog.items()) if ((!blocksOnly || project.types().containsKey(item.type()) && project.types().get(item.type()).block()) && (group.isEmpty() || item.groups().contains(group)) && (item.name().toLowerCase(Locale.ROOT).contains(query) || item.id().contains(query))) model.addElement(item);
         if (!model.isEmpty()) list.setSelectedIndex(0); else selected();
     }
     private void selected() {
         var item = list.getSelectedValue(); properties.setRowCount(0);
         if (item == null) { title.setText("Ничего не найдено"); info.setText(""); return; }
-        title.setText(item.name()); info.setText("<html>" + BehaviorForm.escape(item.id()) + "<br>" + BehaviorForm.escape(item.javaClass()) + "</html>");
+        title.setText(item.name()); info.setText("<html>" + BehaviorForm.escape(item.id()) + "<br>" + (appearanceAccept == null ? BehaviorForm.escape(item.javaClass()) : "Меняет только внешний вид") + "</html>");
         properties.addRow(new Object[]{"Размер стака", item.maxCount(), "Да"}); properties.addRow(new Object[]{"Прочность", item.durability(), "Да"});
         properties.addRow(new Object[]{"Не сгорает", item.fireproof() ? "Да" : "Нет", "Да"});
         var definition = project.types().get(item.type());
@@ -106,6 +117,7 @@ final class CatalogDialog extends JDialog {
     private void add(boolean existing) {
         var source = list.getSelectedValue(); if (source == null) return;
         try {
+            if (appearanceAccept != null) { appearanceAccept.accept(source.id()); dispose(); return; }
             if (existing && project.items.stream().anyMatch(e -> e.id.equals(source.id()))) throw new IllegalArgumentException("Этот предмет уже есть в вашем списке. Отредактируйте его карточку.");
             var entry = fromCatalog(project, source, existing);
             if (!source.icon().isBlank()) {
