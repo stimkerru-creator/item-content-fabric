@@ -39,6 +39,9 @@ public final class ItemContentEditor {
                 }
             }
             for (int index = 0; index + 1 < args.length; index++) if (args[index].equals("--select")) panel.selectItem(args[index + 1]);
+            for (int index=0;index+1<args.length;index++) if(args[index].equals("--game")) {
+                Path folder=Path.of(args[index+1]); panel.guarded(() -> panel.loadCatalog(CatalogPaths.locate(folder)));
+            }
             if (Arrays.asList(args).contains("--behavior")) ((JTabbedPane) findNamed(panel, "detailsTabs")).setSelectedIndex(1);
             if (args.length >= 3 && args[0].equals("--screenshot-catalog")) {
                 try {
@@ -79,10 +82,13 @@ public final class ItemContentEditor {
         private final DefaultListModel<ItemProject.Entry> listModel = new DefaultListModel<>();
         private final JList<ItemProject.Entry> list = new JList<>(listModel);
         private final JTextField name = new JTextField(), id = new JTextField(), appearance = new JTextField(), search = new JTextField();
-        private final JRadioButton custom = new JRadioButton("Своя текстура (PNG)"), existing = new JRadioButton("Готовый вид из игры", true);
+        private final JRadioButton custom = new JRadioButton("Простая текстура"), existing = new JRadioButton("Как у предмета из игры", true);
+        private final JRadioButton imported = new JRadioButton("Модель Minecraft");
+        private final JButton importModel = new JButton("Импортировать модель…");
         private final JCheckBox fireproof = new JCheckBox("Не сгорает в огне и лаве");
         private final JSpinner maxCount = new JSpinner(new SpinnerNumberModel(64, 1, 99, 1));
         private final ImagePreview preview = new ImagePreview();
+        private final JTextField modelSource = new JTextField();
         private final JLabel texturePath = label("", 12, false, MUTED);
         private final JLabel status = label("Готово к созданию предметов", 12, false, MUTED);
         private final JLabel saveState = label("Не сохранено", 12, false, MUTED);
@@ -101,8 +107,8 @@ public final class ItemContentEditor {
         private Path catalogFile;
         private final JButton textureOptions = new JButton("Другие текстуры…");
         private record GroupChoice(String id, String name) { @Override public String toString() { return name; } }
-        private final JButton choosePng = new JButton("Выбрать свою текстуру…");
-        private final JButton chooseGameAppearance = new JButton("Выбрать из игры…");
+        private final JButton choosePng = new JButton("Выбрать PNG-файл…");
+        private final JButton chooseGameAppearance = new JButton("Выбрать предмет…");
         private final JPanel appearanceActions=panel(new CardLayout());
         private JButton removeButton, duplicateButton;
         private boolean refreshing, dirty;
@@ -155,7 +161,7 @@ public final class ItemContentEditor {
             JButton file = button(actions, "Файл", "fileMenu", () -> {}); quiet(file);
             JPopupMenu menu = new JPopupMenu();
             menu(menu, "Открыть список предметов…", "openProject", this::open);
-            menu(menu, "Загрузить каталог предметов из игры…", "openCatalog", this::openCatalog);
+            menu(menu, "Подключить сборку Minecraft…", "openCatalog", this::openCatalog);
             menu(menu, "Экспортировать файлы для переноса…", "exportFiles", this::export);
             menu(menu, "Сохранить список как…", "saveAs", () -> saveAs()); menu.addSeparator();
             menu(menu, "Новый список предметов…", "newProject", () -> { if (mayDiscard()) reset(); });
@@ -211,12 +217,15 @@ public final class ItemContentEditor {
         private JComponent appearanceCard() {
             preview.setName("itemPreview");
             JPanel content = new JPanel(new GridBagLayout()); content.setBorder(padding(18, 18, 18, 18));
-            JPanel art = panel(new BorderLayout(0, 12)); art.setPreferredSize(new Dimension(230, 260)); preview.setMinimumSize(new Dimension(160,100));
-            custom.setName("ownTextureMode"); existing.setName("gameAppearanceMode");
+            JPanel art = panel(new BorderLayout(0, 12)); preview.setPreferredSize(new Dimension(230,100)); preview.setMinimumSize(new Dimension(160,100));
+            imported.setName("minecraftModelMode"); custom.setName("ownTextureMode"); existing.setName("gameAppearanceMode");
             custom.setToolTipText("Оформить новый предмет своей PNG-текстурой.");
             existing.setToolTipText("Использовать готовое оформление из игры. Игровые свойства не копируются.");
-            JPanel modes = panel(new GridLayout(0, 1, 0, 4)); ButtonGroup group = new ButtonGroup(); group.add(existing); group.add(custom);
-            modes.add(custom); modes.add(existing);
+            JPanel modes = panel(new GridLayout(0, 1, 0, 4)); ButtonGroup group = new ButtonGroup(); group.add(existing); group.add(custom); group.add(imported);
+            modes.add(imported); modes.add(custom); modes.add(existing);
+            imported.setToolTipText("Собственная модель Minecraft Java: JSON, текстуры и анимация из ресурс-пака.");
+            importModel.setName("importMinecraftModel"); importModel.addActionListener(e -> guarded(this::importMinecraftModel));
+            appearanceActions.add(importModel,"model");
             choosePng.setName("choosePng"); appearanceActions.add(choosePng,"png");
             chooseGameAppearance.setName("pickGameAppearance"); chooseGameAppearance.addActionListener(e -> guarded(this::pickAppearance)); appearanceActions.add(chooseGameAppearance,"game");
             JPanel artTop=panel(new BorderLayout(0,10)); artTop.add(modes,BorderLayout.NORTH); artTop.add(appearanceActions,BorderLayout.CENTER);
@@ -230,8 +239,10 @@ public final class ItemContentEditor {
 
             appearance.setEditable(false); appearance.setFocusable(false); appearance.setOpaque(false); appearance.setBorder(BorderFactory.createEmptyBorder(3,0,3,0));
             field(form, 2, "Выбранный образец внешнего вида", appearance,
-                    "Меняется только оформление.<br>Игровые свойства задаются отдельно.");
+                    "Используются модель и текстуры выбранного предмета.<br>Урон, прочность и другие свойства задаются отдельно.");
             appearance.getParent().setName("gameAppearanceSource");
+            modelSource.setEditable(false); modelSource.setFocusable(false); modelSource.setName("importedModelSource");
+            field(form,2,"Импортированная модель",modelSource,"Файлы модели сохранены в списке предметов.<br>Слева — текстура. Объёмный вид проверяется в Minecraft.");
             GridBagConstraints extraConstraints=new GridBagConstraints(); extraConstraints.gridx=0; extraConstraints.gridy=3;
             extraConstraints.anchor=GridBagConstraints.NORTHWEST; extraConstraints.insets=new Insets(10,0,0,0); form.add(textureOptions,extraConstraints);
             appearance.setToolTipText("ID предмета, чьё оформление нужно использовать. Его урон, прочность и другие свойства не копируются.");
@@ -270,9 +281,10 @@ public final class ItemContentEditor {
             ((JSpinner.DefaultEditor) maxCount.getEditor()).getTextField().getDocument().addDocumentListener(listener(this::changed));
             maxCount.addChangeListener(e -> changed()); fireproof.addActionListener(e -> changed());
             custom.addActionListener(e -> { changed(); updateImage(); }); existing.addActionListener(e -> { changed(); updateImage(); });
+            imported.addActionListener(e -> { changed(); updateImage(); });
             search.getDocument().addDocumentListener(listener(() -> { if (!refreshing) guarded(() -> { commit(); refreshList(current); }); }));
             choosePng.addActionListener(e -> guarded(() -> {
-                JFileChooser chooser = chooser("Выберите картинку предмета", false); chooser.setFileFilter(new FileNameExtensionFilter("PNG-картинка", "png"));
+                JFileChooser chooser = chooser("Выберите PNG-файл на компьютере", false); chooser.setFileFilter(new FileNameExtensionFilter("PNG-картинка", "png"));
                 if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
                 ItemProject.validatePng(chooser.getSelectedFile().toPath()); selectedTexture = chooser.getSelectedFile().getAbsolutePath();
                 custom.setSelected(true); changed(); updateImage();
@@ -357,7 +369,7 @@ public final class ItemContentEditor {
             int sequence = project.items.size() + 1;
             while (containsId("itemcontent:item_" + sequence)) sequence++;
             entry.id = "itemcontent:item_" + sequence; entry.name = "Предмет " + sequence;
-            entry.customModel = true;
+            entry.importedAppearance = true;
             if (!selectedGroup.isEmpty()) entry.group = selectedGroup;
             project.items.add(entry);
             refreshing = true; search.setText(""); refreshing = false;
@@ -380,17 +392,17 @@ public final class ItemContentEditor {
             current.name = name.getText().trim(); if (!current.existing) current.id = "itemcontent:" + id.getText().trim();
             current.appearance = appearance.getText().trim(); current.maxCount = ((Number) maxCount.getValue()).intValue();
             current.properties = behavior.read();
-            current.customModel = custom.isSelected(); current.fireproof = fireproof.isSelected(); current.texture = selectedTexture;
+            current.importedAppearance = imported.isSelected(); current.customModel = custom.isSelected(); current.fireproof = fireproof.isSelected(); current.texture = selectedTexture;
             list.repaint();
         }
         private void showCurrent() {
             refreshing = true;
             boolean enabled = current != null;
-            for (JComponent component : new JComponent[]{name, id, appearance, maxCount, custom, existing, fireproof, choosePng}) component.setEnabled(enabled);
+            for (JComponent component : new JComponent[]{name, id, appearance, maxCount, custom, existing, imported, importModel, fireproof, choosePng}) component.setEnabled(enabled);
             name.setText(enabled ? current.name : ""); id.setText(enabled ? current.existing ? current.id : current.id.substring("itemcontent:".length()) : "");
             idPrefix.setText(enabled && current.existing ? "" : "itemcontent:"); id.setEnabled(enabled && !current.existing);
             appearance.setText(enabled ? current.appearance : "minecraft:iron_ingot"); maxCount.setValue(enabled ? current.maxCount : 64);
-            custom.setSelected(enabled && current.customModel); existing.setSelected(!enabled || !current.customModel);
+            custom.setSelected(enabled && current.customModel && !current.importedAppearance); imported.setSelected(enabled && current.importedAppearance); existing.setSelected(!enabled || !current.customModel && !current.importedAppearance);
             fireproof.setSelected(enabled && current.fireproof);
             selectedTexture = enabled ? current.texture : "";
             selectionTitle.setText(enabled ? current.name : search.getText().isBlank() ? "Создайте первый предмет" : "Ничего не найдено");
@@ -410,23 +422,33 @@ public final class ItemContentEditor {
             updateImage(); refreshing = false; updateSaveState();
         }
         private void updateImage() {
-            appearance.setEnabled(current != null && !custom.isSelected() && !project.type(current).model().equals("chest") && !(current.existing && project.type(current).block())); choosePng.setEnabled(current != null);
-            ((CardLayout)appearanceActions.getLayout()).show(appearanceActions,custom.isSelected() ? "png" : "game");
-            appearanceActions.setVisible(current != null && (custom.isSelected() || appearance.isEnabled()));
+            modelSource.getParent().setVisible(current != null && imported.isSelected());
+            modelSource.setText(current != null && current.importedModel != null ? current.importedModel.root : "Выберите JSON-модель или ресурс-пак");
+            appearance.setEnabled(current != null && existing.isSelected() && !project.type(current).model().equals("chest") && !(current.existing && project.type(current).block())); choosePng.setEnabled(current != null);
+            ((CardLayout)appearanceActions.getLayout()).show(appearanceActions,imported.isSelected() ? "model" : custom.isSelected() ? "png" : "game");
+            appearanceActions.setVisible(current != null && (imported.isSelected() || custom.isSelected() || appearance.isEnabled()));
             chooseGameAppearance.setEnabled(current != null && appearance.isEnabled());
-            appearance.getParent().setVisible(current != null && !custom.isSelected() && appearance.isEnabled());
-            preview.showImage(null, custom.isSelected() ? "Выберите свою текстуру" : "Готовый вид из игры");
-            texturePath.setText(current != null && project.type(current).model().equals("chest") && !custom.isSelected() ? "Форма сундука · доски дуба" : custom.isSelected() ? "PNG ещё не выбрана" : "Свойства задаются отдельно"); texturePath.setToolTipText(null);
+            appearance.getParent().setVisible(current != null && existing.isSelected() && appearance.isEnabled());
+            preview.showImage(null, custom.isSelected() ? "Добавьте PNG-файл" : catalog == null ? "Подключите сборку" : "Нет предпросмотра");
+            texturePath.setText(current != null && project.type(current).model().equals("chest") && !custom.isSelected() ? "Форма сундука · доски дуба" : custom.isSelected() ? "Картинка с вашего компьютера" : catalog == null ? "Выберите папку своей сборки" : "Модель и текстуры образца"); texturePath.setToolTipText(null);
             textureOptions.setVisible(current != null && textureSlots().length > 0);
             textureOptions.setEnabled(current != null && textureSlots().length > 0 && (custom.isSelected() || current.type.equals("itemcontent:armor")));
             textureOptions.setToolTipText(custom.isSelected() || current != null && current.type.equals("itemcontent:armor") ? null : "Отдельные грани блока, кадры лука и текстуры брони. Для граней и кадров сначала выберите свою основную PNG.");
-            if (!custom.isSelected() && catalog!=null) {
+            if (existing.isSelected() && catalog!=null) {
                 catalog.items().stream().filter(item -> item.id().equals(appearance.getText()) && !item.icon().isBlank()).findFirst().ifPresent(item -> {
                     try {
                         Path root=catalogFile.getParent(), image=root.resolve(item.icon()).normalize();
                         if (image.startsWith(root)) { ItemProject.validatePng(image); preview.showImage(ImageIO.read(image.toFile()), ""); texturePath.setText("Иконка выбранного образца"); }
                     } catch (Exception ignored) { }
                 });
+            }
+            if (imported.isSelected()) {
+                preview.showImage(null, "Импортируйте модель"); texturePath.setText("JSON + текстуры ресурс-пака");
+                if (current != null && current.importedModel != null) try {
+                    preview.showImage(current.importedModel.texturePreview(), "Модель импортирована");
+                    texturePath.setText("<html>" + current.importedModel.files.size() + " файлов · текстура модели<br>3D-вид проверяется в Minecraft</html>");
+                    texturePath.setToolTipText(current.importedModel.root);
+                } catch (java.io.IOException failure) { texturePath.setText("Ошибка ресурсов модели"); }
             }
             if (custom.isSelected() && selectedTexture != null && !selectedTexture.isBlank()) {
                 try {
@@ -436,6 +458,56 @@ public final class ItemContentEditor {
                 } catch (Exception e) { preview.showImage(null, "PNG недоступна"); texturePath.setText("Выберите картинку заново"); }
             }
         }
+        private void importMinecraftModel() throws java.io.IOException {
+            JFileChooser chooser = chooser("Модель Minecraft Java — JSON или ресурс-пак", false);
+            chooser.setFileSelectionMode(JFileChooser.FILES_AND_DIRECTORIES);
+            chooser.setFileFilter(new FileNameExtensionFilter("Модель Java (.json), ресурс-пак (.zip) или ресурсы мода (.jar)", "json", "zip", "jar"));
+            chooser.setAccessory(new JLabel("<html><body style='width:220px;padding:10px'>"
+                    + "<b>Что выбрать</b><br>Модель JSON вместе с PNG рядом с ней, ZIP ресурс-пака или его папку.<br><br>"
+                    + "Редактор сам подключит текстуры, родительские модели и кадры. Исходные файлы останутся на месте.<br><br>"
+                    + "В Blockbench нужен экспорт <b>Java Block/Item</b>. Файл .bbmodel — исходник редактора, не ресурс Minecraft.<br><br>"
+                    + "Модель задаёт внешний вид. Тип и действия объекта задаются в «Свойства в игре».</body></html>"));
+            if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
+            Path path = chooser.getSelectedFile().toPath();
+            try (MinecraftModel.Source source = MinecraftModel.open(path)) {
+                String model = MinecraftModel.selectedModel(path);
+                if (model == null) {
+                    java.util.List<String> available = source.models();
+                    if (available.isEmpty()) throw new java.io.IOException("В выбранном ресурс-паке нет моделей Java в assets/<имя>/models/.");
+                    DefaultListModel<String> options = new DefaultListModel<>(); options.addAll(available);
+                    JList<String> models = new JList<>(options); models.setSelectionMode(ListSelectionModel.SINGLE_SELECTION); models.setSelectedIndex(0);
+                    JTextField filter = new JTextField(); filter.putClientProperty("JTextField.placeholderText", "Поиск модели по имени");
+                    filter.getDocument().addDocumentListener(listener(() -> {
+                        String query = filter.getText().trim().toLowerCase(Locale.ROOT); options.clear();
+                        options.addAll(available.stream().filter(value -> value.contains(query)).toList()); if (!options.isEmpty()) models.setSelectedIndex(0);
+                    }));
+                    JPanel choices = new JPanel(new BorderLayout(0,10)); choices.add(new JLabel("Выберите модель для создаваемого объекта"), BorderLayout.NORTH);
+                    JPanel center = new JPanel(new BorderLayout(0,8)); center.add(filter,BorderLayout.NORTH); center.add(new JScrollPane(models),BorderLayout.CENTER);
+                    choices.add(center,BorderLayout.CENTER); choices.setPreferredSize(new Dimension(520,340));
+                    if (JOptionPane.showConfirmDialog(this, choices, "Модели ресурс-пака", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION || models.getSelectedValue() == null) return;
+                    model = models.getSelectedValue();
+                }
+                String selectedModel = model;
+                JDialog progress = new JDialog(SwingUtilities.getWindowAncestor(this), "Импорт модели", Dialog.ModalityType.APPLICATION_MODAL);
+                progress.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
+                JPanel message = new JPanel(new BorderLayout(0,12)); message.setBorder(padding(20,20,20,20));
+                message.add(new JLabel("Читаем модель и связанные текстуры…"),BorderLayout.NORTH);
+                JProgressBar bar = new JProgressBar(); bar.setIndeterminate(true); message.add(bar,BorderLayout.CENTER);
+                progress.setContentPane(message); progress.pack(); progress.setLocationRelativeTo(this);
+                new SwingWorker<MinecraftModel,Void>() {
+                    protected MinecraftModel doInBackground() throws Exception { return MinecraftModel.load(source,selectedModel); }
+                    protected void done() {
+                        progress.dispose();
+                        try {
+                            MinecraftModel result=get(); current.importedModel=result; imported.setSelected(true); changed(); updateImage();
+                            status.setText("Модель подключена: " + result.root + " · " + result.files.size() + " файлов. Сохраните и установите в Minecraft.");
+                        } catch (Exception failure) { error(failure.getCause() instanceof Exception cause ? cause : failure); }
+                    }
+                }.execute();
+                progress.setVisible(true);
+            }
+        }
+
         private boolean save() { return save(false); }
         private boolean saveAs() { return save(true); }
         private boolean save(boolean chooseFile) {
@@ -506,7 +578,7 @@ public final class ItemContentEditor {
         private void help() {
             JOptionPane.showMessageDialog(this, "1. «Создать предмет» добавляет предмет в список слева.\n"
                     + "2. Выберите категорию и тип: меч, еда, обычный блок и другие.\n"
-                    + "3. В «Название и внешний вид» выберите свою PNG. Готовый вид из игры — необязательная альтернатива.\n"
+                    + "3. В «Название и внешний вид» импортируйте модель Minecraft, добавьте простую текстуру или выберите образец из игры.\n"
                     + "4. В «Свойства в игре» задайте урон, прочность или другие свойства выбранного типа.\n"
                     + "5. «Сохранить» запоминает весь список для дальнейшего редактирования.\n"
                     + "6. «Установить в Minecraft» записывает мод, настройки и текстуры в выбранную папку игры.\n\n"
@@ -534,7 +606,7 @@ public final class ItemContentEditor {
             for (var property : type.properties()) if (previous.has(property.id())) try { property.validate(previous.get(property.id())); values.add(property.id(), previous.get(property.id())); } catch (IllegalArgumentException ignored) { }
             current.type = type.id(); current.properties = type.validate(values, false); current.group = type.defaultGroup();
             current.maxCount = current.properties.has("durability") && current.properties.get("durability").getAsInt() > 0 ? 1 : 64;
-            if (!current.customModel) current.appearance = switch (type.id()) {
+            if (!current.customModel && !current.importedAppearance) current.appearance = switch (type.id()) {
                 case "itemcontent:food" -> "minecraft:apple"; case "itemcontent:sword" -> "minecraft:iron_sword"; case "itemcontent:bow" -> "minecraft:bow"; case "itemcontent:crossbow" -> "minecraft:crossbow";
                 case "itemcontent:pickaxe" -> "minecraft:iron_pickaxe"; case "itemcontent:axe" -> "minecraft:iron_axe"; case "itemcontent:shovel" -> "minecraft:iron_shovel"; case "itemcontent:hoe" -> "minecraft:iron_hoe";
                 case "itemcontent:armor" -> "minecraft:iron_chestplate"; case "itemcontent:decorative_furnace" -> "minecraft:furnace"; default -> type.block() ? "minecraft:stone" : "minecraft:iron_ingot";
@@ -554,14 +626,19 @@ public final class ItemContentEditor {
             if (chooseCatalog()) browseCatalog();
         }
         private boolean chooseCatalog() throws java.io.IOException {
-            JFileChooser chooser = chooser("Каталог из игры: config/item-content/catalog.json", false);
-            chooser.setFileFilter(new FileNameExtensionFilter("Каталог игры (*.json)", "json"));
-            Path folder = GameInstallation.defaultGameDirectory().resolve("config/item-content");
+            JFileChooser chooser = chooser("Подключить сборку — выберите папку Minecraft", true);
+            Path folder = GameInstallation.defaultGameDirectory();
             if (Files.isDirectory(folder)) chooser.setCurrentDirectory(folder.toFile());
-            chooser.setSelectedFile(folder.resolve("catalog.json").toFile());
-            chooser.setAccessory(new JLabel("<html>Сначала запустите Minecraft с Item Content.<br>Мод создаст catalog.json и картинки предметов<br>в config/item-content выбранной сборки.</html>"));
+            chooser.setSelectedFile(folder.toFile());
+            chooser.setApproveButtonText("Подключить сборку");
+            chooser.setAccessory(new JLabel("<html><div style='width:240px'>"
+                    +"<b>Выберите папку нужной сборки</b><br><br>"
+                    +"В ней находятся mods, config и resourcepacks. Найти её можно через папку сборки в вашем лаунчере.<br><br>"
+                    +"Перед первым подключением запустите Minecraft с Item Content и войдите в мир. Мод подготовит список предметов.<br><br>"
+                    +"Не нужно открывать JAR мода, искать PNG внутри Minecraft или выбирать служебные файлы."
+                    +"</div></html>"));
             if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return false;
-            loadCatalog(chooser.getSelectedFile().toPath()); return true;
+            loadCatalog(CatalogPaths.locate(chooser.getSelectedFile().toPath())); return true;
         }
         private void pickAppearance() throws java.io.IOException {
             if (current == null || catalog == null && !chooseCatalog()) return;

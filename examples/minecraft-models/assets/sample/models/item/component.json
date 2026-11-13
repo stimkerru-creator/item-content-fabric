@@ -1,0 +1,11 @@
+{
+  "parent": "sample:item/base",
+  "overrides": [
+    {
+      "predicate": {
+        "pulling": 1
+      },
+      "model": "sample:item/pulled"
+    }
+  ]
+}

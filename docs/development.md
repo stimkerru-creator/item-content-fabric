@@ -1,7 +1,7 @@
 # Сборка и подготовка публикации
 
 Исходники: JDK 17+, Gradle Wrapper включён. Для первой сборки нужен доступ к репозиториям зависимостей.
-Готовое desktop-приложение требует Java 17+, без JDK и Gradle.
+Готовый Windows-комплект включает Java; универсальный ZIP/JAR требует установленную Java 17+. Для запуска готового редактора JDK и Gradle не нужны.
 
 ## Проверки
 
@@ -25,7 +25,7 @@ ZIP содержит готовый редактор в `lib`, мод в `mods`,
 В Windows запускайте `run-editor.bat` после распаковки всей папки. На Linux/macOS:
 
 ```text
-java -jar lib/item-content-editor-1.2.0.jar
+java -jar lib/item-content-editor-1.3.0.jar
 ```
 
 GitHub Actions повторяет сборку на Java 17 и прикладывает артефакты к запуску workflow.
@@ -48,7 +48,7 @@ GitHub Actions повторяет сборку на Java 17 и приклады�
 
 ## Совместимость и расширения
 
-Форматы списка и экспорта повышены до 2; версии 1 по-прежнему читаются.
+Список редактора имеет версию 3 (встроенные модели); версии 1/2 по-прежнему читаются. Игровой конфиг остаётся версии 2.
 Общие неизменяемые описания находятся в `common`; игровые фабрики — в `src/main`;
 редактор строит формы по описаниям и не зависит от классов Minecraft.
 [API типов](extensions.md) отделяет специфическую игровую механику от формата/интерфейса.
@@ -75,7 +75,7 @@ Swing/FlatLaf не входят в Minecraft JAR; тестовые постав�
 Для снимков редактора:
 
 ```text
-java -jar editor/build/libs/item-content-editor-1.2.0.jar --screenshot build/editor.png 1280 680 --open examples/content-types.icproject --select itemcontent:bronze_sword --behavior
+java -jar editor/build/libs/item-content-editor-1.3.0.jar --screenshot build/editor.png 1280 680 --open examples/content-types.icproject --select itemcontent:bronze_sword --behavior
 ```
 
 UI-тесты проходят при масштабах 1, 1.25 и 1.5. Они проверяют видимость действий и высоту полей,
@@ -92,3 +92,33 @@ Do not rebuild a JAR used by a directly launched `java -jar` process.
 
 Native Windows regression check (opens temporary test windows):
 `powershell -File tools/check-editor-close.ps1 -JavaHome <JDK path>` after building the editor.
+
+## Готовый Windows-комплект и GitHub Release
+
+```powershell
+python tools/prepare-windows-runtime.py
+python tools/package-release.py --windows-runtime "build/windows-runtime/jdk-17.0.21+9-jre"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/check-windows-release.ps1 -Archive build/distributions/item-content-1.3.0-windows-x64.zip
+```
+
+Скрипт runtime использует закреплённую версию Temurin и проверяет SHA-256 обоих архивов.
+В Windows-комплект попадает немодифицированный JRE со всеми его лицензиями; соответствующие
+исходники Java публикуются отдельным архивом рядом с программой. Minecraft и Fabric API в ZIP не входят.
+
+Проверка ZIP распаковывает его в отдельную папку внутри `build`, убирает Java из PATH,
+задаёт неверный JAVA_HOME, проверяет выбор вложенной Java и запускает настоящее окно редактора
+для получения снимка. Пользовательские окна и Java-настройки компьютера не меняются.
+
+Workflow **Ready-to-run release** собирает Windows-комплект и публикует файлы в Releases при теге `v*`.
+Версия тега и `gradle.properties` должны совпадать. `workflow_dispatch` подготавливает скачиваемый CI-артефакт без публикации Release.
+
+Для проверки импорта моделей в настоящем Minecraft:
+
+```powershell
+.\gradlew.bat -p editor exportModelFixture --no-daemon
+.\gradlew.bat runIntegrationClient --no-daemon -PtestNativeModels=true -PacceptMinecraftEula=true
+```
+
+`exportModelFixture` использует тот же импорт/экспорт, что и интерфейс, и только заменяет свою
+папку `build/native-model-fixture`. Клиент проверяет геометрию, загрузку текстур в атлас,
+модель блока и переключение собственной модели лука при натяжении.

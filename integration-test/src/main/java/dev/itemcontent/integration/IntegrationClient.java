@@ -29,7 +29,32 @@ public final class IntegrationClient implements ClientModInitializer {
                     var item=Registries.ITEM.get(new Identifier("itemcontent:"+path));
                     if(client.getItemRenderer().getModel(new ItemStack(item),client.world,null,0)==client.getBakedModelManager().getMissingModel())throw new AssertionError("Missing rendered model: "+path);
                 }
-                Files.writeString(Path.of("client-integration-result.txt"),"PASS catalog items="+catalog.items().size()+" groups="+catalog.groups().size()+" icons="+icons+"; provider properties, native inspection and 6 item/block models");
+                int importedChecks=0;
+                if (Registries.ITEM.containsId(new Identifier("itemcontent:native_item"))) {
+                    for (String kind:java.util.List.of("item","block","bow")) {
+                        var item=Registries.ITEM.get(new Identifier("itemcontent:native_"+kind));
+                        var model=client.getItemRenderer().getModel(new ItemStack(item),client.world,null,0);
+                        if (model==client.getBakedModelManager().getMissingModel()) throw new AssertionError("Missing imported "+kind);
+                        if (!model.getParticleSprite().getContents().getId().getPath().startsWith("item/imported/")) throw new AssertionError("Imported texture was not stitched: "+kind);
+                        int quads=model.getQuads(null,null,net.minecraft.util.math.random.Random.create(1)).size();
+                        for (var direction:net.minecraft.util.math.Direction.values()) quads+=model.getQuads(null,direction,net.minecraft.util.math.random.Random.create(1)).size();
+                        if (quads<12) throw new AssertionError("Imported geometry lost: "+kind+" quads="+quads);
+                        importedChecks++;
+                    }
+                    var bow=Registries.ITEM.get(new Identifier("itemcontent:native_bow"));
+                    var saved=client.player.getMainHandStack(); var stack=new ItemStack(bow);
+                    var resting=client.getItemRenderer().getModel(stack,client.world,client.player,0);
+                    try {
+                        client.player.setStackInHand(net.minecraft.util.Hand.MAIN_HAND,stack); client.player.setCurrentHand(net.minecraft.util.Hand.MAIN_HAND);
+                        var pulling=client.getItemRenderer().getModel(stack,client.world,client.player,0);
+                        if (pulling==resting) throw new AssertionError("Imported bow override did not activate");
+                        importedChecks++;
+                    } finally {client.player.stopUsingItem();client.player.setStackInHand(net.minecraft.util.Hand.MAIN_HAND,saved);}
+                    var block=Registries.BLOCK.get(new Identifier("itemcontent:native_block"));
+                    if (client.getBlockRenderManager().getModel(block.getDefaultState())==client.getBakedModelManager().getMissingModel()) throw new AssertionError("Missing imported placed-block model");
+                    importedChecks++;
+                }
+                Files.writeString(Path.of("client-integration-result.txt"),"PASS catalog items="+catalog.items().size()+" groups="+catalog.groups().size()+" icons="+icons+"; provider properties, native inspection and 6 item/block models; native import checks="+importedChecks);
                 System.out.println("ITEMCONTENT_CLIENT_INTEGRATION_PASS");
             } catch(Exception failure) { throw new IllegalStateException("Client integration failed",failure); }
             finally {client.scheduleStop();}

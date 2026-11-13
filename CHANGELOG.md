@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.3.0
+
+- Import Minecraft Java 1.20.1 models from JSON, ZIP or a resource-pack folder.
+- Collect parent models, textures, texture animation metadata and item overrides automatically.
+- Accept standalone Java Block/Item exports with PNG files next to the model.
+- Embed imported resources in editor document version 3; retain version 1/2 reads.
+- Export per-object resource paths without overwriting the source pack's namespaces.
+- Validate missing resources, parent cycles, ZIP paths and size limits before export.
+- Connect a game catalog by choosing the instance folder rather than a service JSON file.
+- Publish a ready-to-run Windows x64 ZIP with an unmodified Temurin Java runtime.
+- Prefer bundled Java, remove automatic source builds from the end-user launcher.
+- Add downloadable Release assets and an automated Windows release workflow.
+
 ## 1.2.0
 
 - Launch immutable editor copies so rebuilding cannot break dialogs in a running instance.

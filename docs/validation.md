@@ -1,5 +1,25 @@
 # Validation record
 
+## 1.3.0 — 2026-11-13
+
+- Desktop: **56 tests**, zero failures, at UI scales **1, 1.25 and 1.5**.
+- Runtime/export loader: **13 tests**, zero failures.
+- Native importer checks cover folder/ZIP/JAR and standalone JSON imports, parent chains,
+  independent textures, animation metadata, item overrides/display, source-independent round trips,
+  blocks/inventory/mining export, per-item resource isolation, inactive PNG handling, missing resources,
+  invalid formats, parent cycles, tampered saved bundles, ZIP traversal and inflated-file limits.
+- Real Minecraft 1.20.1 Fabric server: **28 checks PASS**.
+- Real client: **1272 catalog items / 12 creative tabs / 1059 exported icons**, existing six
+  model checks PASS, plus **5 native import checks PASS**: item, block and bow geometry/atlas texture;
+  bow override activates while using the item; block model resolves for placement.
+- The imported example is exported by the actual desktop importer/exporter, then consumed by Minecraft.
+  No custom Minecraft renderer or executable model loader is added.
+- Windows ZIP was extracted to a path with spaces. With Java removed from PATH and invalid JAVA_HOME,
+  the launcher chose the bundled Temurin runtime and the actual editor produced a screenshot.
+- Native save/discard/cancel regression remains PASS: discard, cancel and X, dialog **665×180**.
+- All game checks use the isolated `build/integration-server` / `build/integration-client` worlds.
+  No user game installation, open editor document or user world was modified by these tests.
+
 ## 1.2.0 — 2026-11-12
 
 ### Editor clarity and installation update

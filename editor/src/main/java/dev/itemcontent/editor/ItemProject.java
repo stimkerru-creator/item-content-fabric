@@ -12,7 +12,8 @@ import java.util.*;
 /** Item authoring with no recipes and no Minecraft runtime dependency. */
 public final class ItemProject {
     private static final Gson JSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
-    private static final long MAX_BYTES = 4L * 1024 * 1024;
+    private static final long MAX_BYTES = 48L * 1024 * 1024;
+    private static final long MAX_CONFIG_BYTES = 4L * 1024 * 1024;
     public final List<Entry> items = new ArrayList<>();
     public final List<TypeDefinition> extensionTypes = new ArrayList<>();
     public final List<GameCatalog.Group> groups = new ArrayList<>();
@@ -37,7 +38,8 @@ public final class ItemProject {
     public static final class Entry {
         public String id = "itemcontent:new_item", name = "Новый предмет";
         public String appearance = "minecraft:iron_ingot", texture = "";
-        public boolean customModel, fireproof;
+        public boolean customModel, fireproof, importedAppearance;
+        public MinecraftModel importedModel;
         public int maxCount = 64;
         public String type = "itemcontent:item", group = "minecraft:ingredients";
         public boolean existing, categoryLocked;
@@ -46,6 +48,8 @@ public final class ItemProject {
         public Entry copy() {
             Entry e = new Entry(); e.id = id; e.name = name; e.appearance = appearance; e.texture = texture;
             e.maxCount = maxCount; e.customModel = customModel; e.fireproof = fireproof;
+            e.importedAppearance = importedAppearance;
+            if (importedModel != null) { e.importedModel = new MinecraftModel(); e.importedModel.root = importedModel.root; e.importedModel.files = new LinkedHashMap<>(importedModel.files); }
             e.type = type; e.group = group; e.existing = existing; e.categoryLocked = categoryLocked; e.properties = properties.deepCopy(); e.referenceProperties = referenceProperties.deepCopy(); e.textures = new LinkedHashMap<>(textures); return e;
         }
         @Override public String toString() { return name + "  (" + id + ")"; }
@@ -63,6 +67,7 @@ public final class ItemProject {
         }
         Map<String,String> modelAliases = new LinkedHashMap<>();
         Set<String> ids = new HashSet<>();
+        long resourceBytes = 0;
         for (Entry item : items) {
             if (item == null) throw new IllegalArgumentException("Пустое описание предмета.");
             identifier(item.id);
@@ -75,7 +80,12 @@ public final class ItemProject {
             if (item.id.equals("minecraft:air")) throw new IllegalArgumentException("Нельзя редактировать воздух");
             var definition = type(item);
             var values = definition.validate(item.properties, item.existing);
-            if (!item.customModel && !definition.model().equals("chest") && !(item.existing && item.id.equals(item.appearance))) modelAliases.put(item.id,item.appearance);
+            if (item.importedModel != null) {
+                try { item.importedModel.validate(); resourceBytes += item.importedModel.decodedSize(); }
+                catch (IOException failure) { throw new IllegalArgumentException(failure.getMessage(), failure); }
+                if (resourceBytes > MinecraftModel.MAX_TOTAL) throw new IllegalArgumentException("Связанные ресурсы списка больше 32 МиБ.");
+            }
+            if (!item.customModel && !item.importedAppearance && !definition.model().equals("chest") && !(item.existing && item.id.equals(item.appearance))) modelAliases.put(item.id,item.appearance);
             if (values.has("durability") && values.get("durability").getAsInt() > 0 && item.maxCount != 1)
                 throw new IllegalArgumentException("Для предмета с прочностью размер стака должен быть 1: " + item.name);
             if (item.textures == null || item.textures.size() > 16 || item.textures.keySet().stream().anyMatch(key -> !Set.of("top", "bottom", "side", "front", "back", "armor_layer_1", "armor_layer_2", "pulling_0", "pulling_1", "pulling_2", "arrow", "firework").contains(key)))
@@ -94,11 +104,11 @@ public final class ItemProject {
     }
     public void save(Path file) throws IOException {
         validate();
-        JsonObject root = new JsonObject(); root.addProperty("editorVersion", 2);
+        JsonObject root = new JsonObject(); root.addProperty("editorVersion", 3);
         root.add("items", JSON.toJsonTree(items));
         root.add("types", JSON.toJsonTree(extensionTypes)); root.add("groups", JSON.toJsonTree(groups));
         String text = JSON.toJson(root);
-        if (text.getBytes(StandardCharsets.UTF_8).length > MAX_BYTES) throw new IOException("Список предметов больше 4 МиБ.");
+        if (text.getBytes(StandardCharsets.UTF_8).length > MAX_BYTES) throw new IOException("Список предметов больше 48 МиБ.");
         if (legacyDocument != null) {
             Path backup = Files.createTempFile(legacySource.getParent(), legacySource.getFileName() + ".before-item-only-", ".bak");
             Files.writeString(backup, legacyDocument, StandardCharsets.UTF_8);
@@ -108,12 +118,12 @@ public final class ItemProject {
         writeAtomic(file.toAbsolutePath(), text);
     }
     public static ItemProject load(Path file) throws IOException {
-        if (Files.size(file) > MAX_BYTES) throw new IOException("Список предметов больше 4 МиБ.");
+        if (Files.size(file) > MAX_BYTES) throw new IOException("Список предметов больше 48 МиБ.");
         try {
             String source = Files.readString(file, StandardCharsets.UTF_8);
             JsonObject root = JsonParser.parseString(source).getAsJsonObject();
             int version = root.get("editorVersion").getAsBigDecimal().intValueExact();
-            if (version != 1 && version != 2) throw new IOException("Эта версия списка предметов не поддерживается.");
+            if (version != 1 && version != 2 && version != 3) throw new IOException("Эта версия списка предметов не поддерживается.");
             Entry[] entries = JSON.fromJson(root.get("items"), Entry[].class);
             ItemProject result = new ItemProject(); result.items.addAll(Arrays.asList(entries));
             if (root.has("types")) result.extensionTypes.addAll(Arrays.asList(JSON.fromJson(root.get("types"), TypeDefinition[].class)));
@@ -132,7 +142,8 @@ public final class ItemProject {
     }
     void validateForExport() throws IOException {
         validate();
-        for (Entry item:items) if (item.customModel) {
+        for (Entry item:items) if (item.importedAppearance && item.importedModel == null) throw new IOException("Импортируйте модель Minecraft для «" + item.name + "».");
+        for (Entry item:items) if (item.customModel && !item.importedAppearance) {
             boolean available=false;
             try { available=item.texture!=null && !item.texture.isBlank() && Files.isRegularFile(Path.of(item.texture)); }
             catch (InvalidPathException ignored) { }
@@ -155,7 +166,7 @@ public final class ItemProject {
         for (Entry item : items) {
             JsonObject object = new JsonObject();
             object.addProperty("id", item.id); object.addProperty("name", item.name);
-            object.addProperty("appearance", item.appearance); object.addProperty("custom_model", item.customModel);
+            object.addProperty("appearance", item.appearance); object.addProperty("custom_model", item.customModel || item.importedAppearance);
             object.addProperty("max_count", item.maxCount); object.addProperty("fireproof", item.fireproof);
             object.addProperty("type", item.type); object.addProperty("group", item.group); object.addProperty("existing", item.existing);
             object.add("properties", type(item).validate(item.properties, item.existing));
@@ -166,7 +177,7 @@ public final class ItemProject {
         for (var group : groups) { var value = new JsonObject(); value.addProperty("id", group.id()); value.addProperty("name", group.name()); value.addProperty("icon", "minecraft:brick"); groupDefinitions.add(value); }
         config.add("groups", groupDefinitions);
         String configJson = JSON.toJson(config);
-        if (configJson.getBytes(StandardCharsets.UTF_8).length > MAX_BYTES) throw new IOException("Каталог предметов превышает 4 МиБ.");
+        if (configJson.getBytes(StandardCharsets.UTF_8).length > MAX_CONFIG_BYTES) throw new IOException("Каталог предметов превышает 4 МиБ.");
         Files.createDirectories(path.getParent());
         Path staged = Files.createTempDirectory(path.getParent(), "item-content-export-");
         try {

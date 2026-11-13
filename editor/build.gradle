@@ -25,3 +25,12 @@ tasks.named('jar') {
 }
 
 sourceSets.main.java.srcDir '../common/src/main/java'
+
+// Exports the real native-model example through the same code used by the UI.
+tasks.register('exportModelFixture', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.itemcontent.editor.NativeModelFixture'
+    args file('..').absolutePath, file('../build/native-model-fixture').absolutePath
+    doFirst { delete file('../build/native-model-fixture') }
+}

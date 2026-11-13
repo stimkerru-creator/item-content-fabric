@@ -90,7 +90,7 @@ class EditorPanelTest {
             var panel=new ItemContentEditor.EditorPanel();
             ((JComboBox<?>) find(panel,"typeCategory")).setSelectedItem("Оружие");
             var attack=(JTextField)find(panel,"behavior.attack_damage"); attack.setText("12");
-            assertTrue(((JRadioButton)find(panel,"ownTextureMode")).isSelected());
+            assertTrue(((JRadioButton)find(panel,"minecraftModelMode")).isSelected());
             assertFalse(find(panel,"gameAppearanceSource").isVisible());
             ((JRadioButton)find(panel,"gameAppearanceMode")).doClick();
             assertTrue(find(panel,"gameAppearanceSource").isVisible());
@@ -146,6 +146,27 @@ class EditorPanelTest {
                 output=rendered.createGraphics(); preview.paint(output); output.dispose();
                 assertEquals(Color.RED.getRGB(),rendered.getRGB(115,90));
             } catch (Exception failure) { throw new RuntimeException(failure); }
+        });
+    }
+
+    @Test void importedModelModeSurvivesSwitchingItemsAndAppearanceModes() throws Exception {
+        var project = new ItemProject(); var item = new ItemProject.Entry();
+        try (var source=MinecraftModel.open(Path.of("../examples/minecraft-models"))) { item.importedModel=MinecraftModel.load(source,"sample:item/component"); }
+        item.importedAppearance=true; project.items.add(item); Path file=temp.resolve("imported.icproject");project.save(file);
+        SwingUtilities.invokeAndWait(() -> {
+            try {
+                var panel=new ItemContentEditor.EditorPanel();panel.openList(file);
+                assertTrue(((JRadioButton)find(panel,"minecraftModelMode")).isSelected());
+                assertTrue(find(panel,"importMinecraftModel").isVisible());
+                assertFalse(find(panel,"appearance").isEnabled());
+                ((JButton)find(panel,"addItem")).doClick();((JList<?>)find(panel,"items")).setSelectedIndex(0);
+                assertTrue(((JRadioButton)find(panel,"minecraftModelMode")).isSelected());
+                ((JRadioButton)find(panel,"ownTextureMode")).doClick();
+                assertTrue(find(panel,"choosePng").isVisible());
+                ((JRadioButton)find(panel,"minecraftModelMode")).doClick();
+                assertTrue(find(panel,"importMinecraftModel").isVisible());
+                for(Dimension size:new Dimension[]{new Dimension(1264,641),new Dimension(964,581)}) { panel.setSize(size);layout(panel);assertTextHeight(panel); }
+            } catch(Exception failure) {throw new RuntimeException(failure);}
         });
     }
 

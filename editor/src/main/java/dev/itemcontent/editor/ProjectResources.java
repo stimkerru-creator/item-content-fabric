@@ -20,7 +20,10 @@ final class ProjectResources {
             language.addProperty("item." + namespace + "." + path.replace('/', '.'), item.name);
             language.addProperty("block." + namespace + "." + path.replace('/', '.'), item.name);
             if (type.block() && !item.existing) block(item, type, pack, properties, tags);
-            else if (item.customModel) item(item, type, pack);
+            else if (item.importedAppearance) {
+                item.importedModel.write(pack, item.id);
+                item.importedModel.writeRoot(pack, pack.resolve("assets/" + namespace + "/models/item/" + path + ".json"), item.id);
+            } else if (item.customModel) item(item, type, pack);
             if (!item.existing && item.type.equals("itemcontent:armor") && properties.get("armor_texture").getAsString().equals("custom")) {
                 for (int layer = 1; layer <= 2; layer++) {
                     String source = item.textures.get("armor_layer_" + layer);
@@ -74,7 +77,7 @@ final class ProjectResources {
     private static void block(ItemProject.Entry item, TypeDefinition type, Path pack, JsonObject properties, Map<String, List<String>> tags) throws IOException {
         String namespace = item.id.substring(0, item.id.indexOf(':')), path = item.id.substring(item.id.indexOf(':') + 1);
         Map<String, String> textures = new LinkedHashMap<>();
-        if (item.customModel) {
+        if (item.customModel && !item.importedAppearance) {
             String all = namespace + ":block/" + path;
             copyPng(item.texture, pack.resolve("assets/" + namespace + "/textures/block/" + path + ".png"));
             textures.put("all", all);
@@ -87,7 +90,10 @@ final class ProjectResources {
             }
         }
         JsonObject blockModel;
-        if (type.model().equals("chest")) {
+        if (item.importedAppearance) {
+            item.importedModel.write(pack, item.id);
+            blockModel = model(item.importedModel.exportedRoot(item.id), Map.of());
+        } else if (type.model().equals("chest")) {
             blockModel = new JsonObject(); blockModel.addProperty("parent", "minecraft:block/block");
             blockModel.add("textures", JSON.toJsonTree(Map.of("all", textures.getOrDefault("all", "minecraft:block/oak_planks"), "up", textures.getOrDefault("top", "#all"), "down", textures.getOrDefault("bottom", "#all"), "north", textures.getOrDefault("front", "#all"), "south", textures.getOrDefault("back", "#all"), "east", textures.getOrDefault("side", "#all"), "west", textures.getOrDefault("side", "#all"), "particle", "#all")));
             JsonArray elements = new JsonArray(); elements.add(cuboid(new int[]{1,0,1}, new int[]{15,10,15}));
@@ -97,7 +103,8 @@ final class ProjectResources {
         } else if (type.model().equals("furnace") || item.textures.size() > 0) {
             blockModel = model("minecraft:block/cube", Map.of("down", textures.get("bottom"), "up", textures.get("top"), "north", textures.get("front"), "south", textures.get("back"), "west", textures.get("side"), "east", textures.get("side"), "particle", textures.get("side")));
         } else blockModel = model("minecraft:block/cube_all", Map.of("all", textures.get("all")));
-        json(pack.resolve("assets/" + namespace + "/models/block/" + path + ".json"), blockModel);
+        if (item.importedAppearance) item.importedModel.writeRoot(pack, pack.resolve("assets/" + namespace + "/models/block/" + path + ".json"), item.id);
+        else json(pack.resolve("assets/" + namespace + "/models/block/" + path + ".json"), blockModel);
         json(pack.resolve("assets/" + namespace + "/models/item/" + path + ".json"), model(namespace + ":block/" + path, Map.of()));
         JsonObject variants = new JsonObject();
         if (type.model().equals("cube")) { JsonObject variant = new JsonObject(); variant.addProperty("model", namespace + ":block/" + path); variants.add("", variant); }

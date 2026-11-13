@@ -25,3 +25,13 @@ Copyright FormDev Software GmbH and FlatLaf contributors. Apache License 2.0.
 https://github.com/JFormDesigner/FlatLaf/blob/3.7.2/LICENSE
 The complete license is included at META-INF/licenses/FlatLaf-LICENSE.txt.
 FlatLaf is not included in the Minecraft mod.
+
+Windows ready-to-run distribution only: Eclipse Temurin OpenJDK JRE 17.0.21+9,
+Windows x64, unmodified. GPLv2 with the Classpath Exception and component licenses.
+All upstream notices are preserved in runtime/legal/; corresponding source archive
+OpenJDK17U-jdk-sources_17.0.21_9.tar.gz is supplied on the same GitHub Release.
+https://github.com/adoptium/temurin17-binaries/releases/tag/jdk-17.0.21%2B9
+
+The editor includes a file-name-only index of vanilla Minecraft 1.20.1 model and
+texture paths to detect missing resources. It does not bundle Minecraft models,
+textures or executable game code.
