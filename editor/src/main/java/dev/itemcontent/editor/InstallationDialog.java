@@ -19,8 +19,7 @@ final class InstallationDialog extends JDialog {
         JPanel form=new JPanel(new BorderLayout(0,14));
         JPanel folders=new JPanel(new GridLayout(0,1,0,12));
         folders.add(folder("Папка Minecraft или сервера",game,false));
-        boolean hasBlocks=project.items.stream().anyMatch(item -> project.type(item).block() && !item.existing);
-        if (hasBlocks) folders.add(folder("Мир для правил добычи блоков",world,true));
+        folders.add(folder("Мир для обновления правил добычи (при изменении или удалении блоков)",world,true));
         form.add(folders,BorderLayout.NORTH);
         paths.setEditable(false); paths.setLineWrap(true); paths.setWrapStyleWord(true); paths.setOpaque(false);
         form.add(paths,BorderLayout.CENTER); JScrollPane scroll=new JScrollPane(form); scroll.setBorder(BorderFactory.createEmptyBorder()); content.add(scroll,BorderLayout.CENTER);
@@ -82,7 +81,7 @@ final class InstallationDialog extends JDialog {
             Path root=Path.of(game.getText().trim()).toAbsolutePath().normalize();
             paths.setText("Куда попадут файлы:\nМод: "+root.resolve("mods")+"\nНастройки: "+root.resolve("config/item-content/items.json")
                     +"\nНабор текстур: "+root.resolve("resourcepacks/item-content")
-                    +(project.items.stream().anyMatch(item -> project.type(item).block() && !item.existing) ? "\nПравила добычи: datapacks/item-content в выбранном мире" : ""));
+                    +"\nПравила добычи: datapacks/item-content в выбранном мире; старые правила будут заменены");
         } catch (RuntimeException failure) { paths.setText("Укажите корректный путь к папке игры."); }
     }
     private static JTextArea text(String value) {

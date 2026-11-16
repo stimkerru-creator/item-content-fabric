@@ -100,6 +100,11 @@ Upstream: https://github.com/adoptium/temurin17-binaries/releases/tag/jdk-17.0.2
     shutil.copyfile(sources, source_target)
     packages.extend([windows, source_target])
     print(f'Windows ZIP (Java included): {windows}')
+# Each download and each bundled JAR must come from this exact build.
+for bundle_path in [archive] + ([windows] if args.windows_runtime else []):
+    with ZipFile(bundle_path) as bundle:
+        for artifact, destination in ((mod, f"mods/{mod.name}"), (editor, f"lib/{editor.name}")):
+            assert hashlib.sha256(bundle.read(destination)).digest() == hashlib.sha256(artifact.read_bytes()).digest(), f"Inconsistent bundled artifact: {destination}"
 checksums = out / f"item-content-{VERSION}-SHA256SUMS.txt"
 checksums.write_text("".join(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n"
                              for path in packages), encoding="utf-8")

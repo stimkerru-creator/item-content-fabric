@@ -87,7 +87,7 @@ class ContentTypesTest {
         Path export = temp.resolve("export"); project.export(export); Path assets = export.resolve("resourcepacks/item-content/assets/itemcontent");
         assertEquals(4, json(Files.readString(assets.resolve("blockstates/decorative_chest.json"))).getAsJsonObject("variants").size());
         assertEquals(3, json(Files.readString(assets.resolve("models/block/decorative_chest.json"))).getAsJsonArray("elements").size());
-        assertEquals("itemcontent:block/block_front", json(Files.readString(assets.resolve("models/block/block.json"))).getAsJsonObject("textures").get("north").getAsString());
+        assertEquals("itemcontent:block/" + ResourcePaths.prefix("generated", "itemcontent:block") + "front", json(Files.readString(assets.resolve("models/block/block.json"))).getAsJsonObject("textures").get("north").getAsString());
         assertEquals(3, json(Files.readString(assets.resolve("models/item/bow.json"))).getAsJsonArray("overrides").size());
         assertEquals(5, json(Files.readString(assets.resolve("models/item/crossbow.json"))).getAsJsonArray("overrides").size());
         assertTrue(Files.exists(assets.resolve("textures/models/armor/armor_layer_2.png")));

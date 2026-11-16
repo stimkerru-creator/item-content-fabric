@@ -44,6 +44,7 @@ final class GameInstallation {
         if (Set.of("mods","config","resourcepacks","datapacks","item-content").contains(game.getFileName().toString().toLowerCase(Locale.ROOT)))
             throw new IOException("Выберите корневую папку игры или сервера, а не mods, config или resourcepacks.");
         safe(game); project.validateForExport();
+        Path oldConfig=game.resolve("config/item-content/items.json"); safe(oldConfig);
         if (mod!=null && !isOurMod(mod)) throw new IOException("Выбранный JAR не является модом Item Content.");
         Path world=worldFolder==null ? null : worldFolder.toAbsolutePath().normalize();
         if (world!=null) {
@@ -59,8 +60,9 @@ final class GameInstallation {
             List<Transfer> plan=new ArrayList<>();
             plan.add(new Transfer(payload.resolve("config/item-content/items.json"),game.resolve("config/item-content/items.json")));
             plan.add(new Transfer(payload.resolve("resourcepacks/item-content"),game.resolve("resourcepacks/item-content")));
-            if (Files.exists(payload.resolve("datapacks/item-content"))) {
-                if (world==null) throw new IOException("Для этих блоков нужен набор данных мира. Выберите мир в окне установки.");
+            if ((Files.isDirectory(payload.resolve("datapacks/item-content/data")) || hadMiningRules(oldConfig)) && world==null)
+                throw new IOException("Для этих блоков нужен набор данных мира. Выберите мир в окне установки.");
+            if (world!=null) {
                 worldStage=Files.createTempDirectory(world,".item-content-install-");
                 Path worldPayload=worldStage.resolve("item-content"); copyTree(payload.resolve("datapacks/item-content"),worldPayload);
                 plan.add(new Transfer(worldPayload,world.resolve("datapacks/item-content")));
@@ -99,6 +101,7 @@ final class GameInstallation {
                 Transfer transfer=plan.get(index);
                 Path backupFolder=worldBackups!=null && transfer.target().startsWith(world) ? worldBackups : backups;
                 Applied operation=new Applied(transfer,backupFolder.resolve(Integer.toString(index))); applied.add(operation);
+                safe(transfer.target());
                 Files.createDirectories(transfer.target().getParent());
                 if (Files.exists(transfer.target())) { Files.move(transfer.target(),operation.backup); operation.saved=true; }
                 if (transfer.source()!=null) { Files.move(transfer.source(),transfer.target()); operation.installed=true; }
@@ -122,6 +125,18 @@ final class GameInstallation {
             if (worldStage!=null) cleanStage(worldStage);
         }
     }
+    private static boolean hadMiningRules(Path config) throws IOException {
+        if (!Files.isRegularFile(config) || Files.size(config)>4L*1024*1024) return false;
+        try {
+            var items=JsonParser.parseString(Files.readString(config)).getAsJsonObject().getAsJsonArray("items");
+            if (items!=null) for (var value:items) {
+                var properties=value.getAsJsonObject().getAsJsonObject("properties");
+                if (properties!=null && ((properties.has("tool") && !properties.get("tool").getAsString().equals("none"))
+                        || (properties.has("mining_level") && properties.get("mining_level").getAsInt()>0))) return true;
+            }
+        } catch (RuntimeException ignored) { /* Preserve and replace invalid old configs as before. */ }
+        return false;
+    }
     private static void copyTree(Path source,Path target) throws IOException {
         try (var files=Files.walk(source)) {
             for (Path file:files.toList()) {
@@ -136,8 +151,7 @@ final class GameInstallation {
         }
     }
     private static void safe(Path target) throws IOException {
-        for (Path p=target.toAbsolutePath().normalize();p!=null;p=p.getParent())
-            if (Files.isSymbolicLink(p)) throw new IOException("Выберите путь без символических ссылок: "+p);
+        PathSafety.check(target);
     }
     private static boolean isOurMod(Path file) throws IOException {
         try (ZipFile zip=new ZipFile(file.toFile())) {

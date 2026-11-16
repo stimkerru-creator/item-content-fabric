@@ -200,7 +200,7 @@ final class MinecraftModel {
             }
             String[] parts = path.split("/", 4);
             Path target = pack.resolve("assets/itemcontent/" + parts[2] + "/" + (parts[2].equals("textures") ? "item/" : "") + prefix(itemId) + parts[1] + "/" + parts[3]);
-            Files.createDirectories(target.getParent()); Files.write(target, bytes);
+            Files.createDirectories(target.getParent()); Files.write(target, bytes, StandardOpenOption.CREATE_NEW);
         }
     }
 
@@ -208,14 +208,13 @@ final class MinecraftModel {
     void writeRoot(Path pack, Path target, String itemId) throws IOException {
         String model = exportedRoot(itemId);
         Path source = pack.resolve("assets/" + model.replace(":", "/models/") + ".json");
-        Files.createDirectories(target.getParent()); Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
+        Files.createDirectories(target.getParent()); Files.copy(source, target);
     }
     private String remap(String value, boolean model, String itemId) throws IOException {
         String key = id(value);
         return files.containsKey(model ? modelPath(key) : texturePath(key)) ? "itemcontent:" + (model ? "" : "item/") + prefix(itemId) + key.replace(':','/') : key;
     }
-    // Fixed-depth hex name prevents item IDs such as a and a/b from overlapping imported files.
-    private static String prefix(String itemId) { return "imported/" + HexFormat.of().formatHex(itemId.getBytes(StandardCharsets.UTF_8)) + "/"; }
+    private static String prefix(String itemId) { return ResourcePaths.prefix("imported", itemId); }
     BufferedImage texturePreview() throws IOException {
         for (var entry : files.entrySet()) if (entry.getKey().endsWith(".png")) return ImageIO.read(new ByteArrayInputStream(decode(entry.getValue())));
         return null;
@@ -242,8 +241,9 @@ final class MinecraftModel {
         try {
             if (json.has("parent")) id(json.get("parent").getAsString());
             if (json.has("textures")) for (var entry : json.getAsJsonObject("textures").entrySet()) { String value = entry.getValue().getAsString(); if (!value.startsWith("#")) id(value); }
-            if (json.has("elements")) json.getAsJsonArray("elements");
-            if (json.has("overrides")) for (var override : json.getAsJsonArray("overrides")) { var o = override.getAsJsonObject(); id(o.get("model").getAsString()); o.getAsJsonObject("predicate"); }
+            ModelStructure.validate(json);
+            if (json.has("overrides")) for (var override : json.getAsJsonArray("overrides")) { var o = override.getAsJsonObject(); id(o.get("model").getAsString()); var predicate = o.getAsJsonObject("predicate"); if (predicate == null) throw new IllegalArgumentException("Missing predicate");
+                for (var entry : predicate.entrySet()) { id(entry.getKey()); ModelStructure.number(entry.getValue()); } }
         } catch (RuntimeException failure) { throw new IOException("Некорректная структура модели: " + path, failure); }
     }
     private static String id(String value) throws IOException {

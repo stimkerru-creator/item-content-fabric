@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.3.1
+
+- Isolate generated bow/crossbow models and block face textures; fail on duplicate export paths.
+- Bound generated/imported path components so all supported 128-character IDs export on Windows.
+- Replace obsolete block mining rules with the current owned datapack, preserving a backup.
+- Require a world selection when previously installed mining rules need updating or clearing.
+- Validate Java model geometry, transformations and override predicates before import/export.
+- Reject Windows junctions and symbolic links in installation and export destinations.
+- Publish the standalone editor JAR with the same build's ZIPs and checksums.
+- Add regression tests for the independent acceptance audit findings.
+
 ## 1.3.0
 
 - Import Minecraft Java 1.20.1 models from JSON, ZIP or a resource-pack folder.

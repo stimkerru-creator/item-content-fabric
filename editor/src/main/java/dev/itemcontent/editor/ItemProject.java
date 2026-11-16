@@ -154,8 +154,7 @@ public final class ItemProject {
     public void export(Path target) throws IOException {
         validateForExport();
         Path path = target.toAbsolutePath().normalize();
-        for (Path p = path; p != null; p = p.getParent())
-            if (Files.isSymbolicLink(p)) throw new IOException("Выберите папку без символических ссылок.");
+        PathSafety.check(path);
         if (Files.exists(path)) {
             if (!Files.isDirectory(path)) throw new IOException("Путь экспорта занят файлом.");
             try (var files = Files.list(path)) {

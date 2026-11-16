@@ -1,5 +1,27 @@
 # Validation record
 
+## 1.3.1 — 2026-11-16
+
+- Desktop: **63 JUnit Platform tests**, zero failures at UI scales **1 and 1.5**.
+- Runtime/export loader: **14 tests**, zero failures; one compares **48 model fixtures**
+  against Minecraft 1.20.1's real `JsonUnbakedModel.deserialize` and editor loading.
+- Independent agent separately compiled production/test sources with Java `--release 17`:
+  **63 tests passed**, plus **16 independent resource/install/path scenarios** and **48 native-model comparisons**.
+  Two pre-existing unsupported empty-model forms remain rejected; no new differences in these fixtures.
+- Regressions cover bow/crossbow helper collisions, block face textures, last mining-rule/block removal,
+  preservation of other datapacks, backups, late-failure rollback, actual NTFS junctions,
+  and maximum 128-character IDs for generated and imported resources.
+- Real Minecraft 1.20.1 Fabric rerun: **28 server checks PASS**; client **1272 catalog items,
+  12 tabs, 1059 icons**, existing six model checks and **five native model checks PASS**.
+  The first server attempt found the fixed test port occupied; the successful isolated rerun used
+  an OS-assigned port through an untracked test init script. No existing server was stopped.
+- Windows package check: extracted ZIP to a path with spaces, removed Java from PATH, set invalid
+  JAVA_HOME, and rendered the native-model example successfully with the bundled Java.
+- Packaging verifies that standalone mod/editor JARs equal their bundled copies before writing checksums.
+  The release workflow now publishes the editor JAR too, alongside both ZIPs and the same checksum manifest.
+- User game installations and worlds were not modified. Test outputs remain under `build/`.
+- This is targeted acceptance of the reported defects, not an unrestricted modpack compatibility guarantee.
+
 ## 1.3.0 — 2026-11-13
 
 - Desktop: **56 tests**, zero failures, at UI scales **1, 1.25 and 1.5**.

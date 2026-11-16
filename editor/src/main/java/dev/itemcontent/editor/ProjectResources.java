@@ -34,7 +34,7 @@ final class ProjectResources {
         }
         json(pack.resolve("assets/itemcontent/lang/en_us.json"), language);
         json(pack.resolve("assets/itemcontent/lang/ru_ru.json"), language);
-        if (!tags.isEmpty()) {
+        { // Always export the current owned datapack, including an empty replacement.
             Path data = staged.resolve("datapacks/item-content");
             json(data.resolve("pack.mcmeta"), JsonParser.parseString("{\"pack\":{\"pack_format\":15,\"description\":\"Item Content block mining tags\"}}"));
             for (var entry : tags.entrySet()) {
@@ -52,23 +52,23 @@ final class ProjectResources {
         if (type.model().equals("bow") || type.model().equals("crossbow")) {
             JsonArray overrides = new JsonArray();
             for (int frame = 0; frame < 3; frame++) {
-                String key = "pulling_" + frame, child = path + "_" + key;
+                String key = "pulling_" + frame, child = generated(item.id) + key;
                 String childTexture = texture;
                 if (item.textures.containsKey(key)) {
-                    childTexture = namespace + ":item/" + child;
-                    copyPng(item.textures.get(key), pack.resolve("assets/" + namespace + "/textures/item/" + child + ".png"));
+                    childTexture = "itemcontent:item/" + child;
+                    copyPng(item.textures.get(key), pack.resolve("assets/itemcontent/textures/item/" + child + ".png"));
                 }
-                json(pack.resolve("assets/" + namespace + "/models/item/" + child + ".json"), model("minecraft:item/" + type.model() + "_" + key, Map.of("layer0", childTexture)));
+                json(pack.resolve("assets/itemcontent/models/" + child + ".json"), model("minecraft:item/" + type.model() + "_" + key, Map.of("layer0", childTexture)));
                 JsonObject predicate = new JsonObject(); predicate.addProperty("pulling", 1);
                 if (frame > 0) predicate.addProperty("pull", type.model().equals("bow") ? (frame == 1 ? 0.65 : 0.9) : (frame == 1 ? 0.58 : 1.0));
-                override(overrides, predicate, namespace + ":item/" + child);
+                override(overrides, predicate, "itemcontent:" + child);
             }
             if (type.model().equals("crossbow")) for (String key : List.of("arrow", "firework")) {
-                String child = path + "_" + key; String childTexture = texture;
-                if (item.textures.containsKey(key)) { childTexture = namespace + ":item/" + child; copyPng(item.textures.get(key), pack.resolve("assets/" + namespace + "/textures/item/" + child + ".png")); }
-                json(pack.resolve("assets/" + namespace + "/models/item/" + child + ".json"), model("minecraft:item/crossbow_" + key, Map.of("layer0", childTexture)));
+                String child = generated(item.id) + key; String childTexture = texture;
+                if (item.textures.containsKey(key)) { childTexture = "itemcontent:item/" + child; copyPng(item.textures.get(key), pack.resolve("assets/itemcontent/textures/item/" + child + ".png")); }
+                json(pack.resolve("assets/itemcontent/models/" + child + ".json"), model("minecraft:item/crossbow_" + key, Map.of("layer0", childTexture)));
                 JsonObject predicate = new JsonObject(); predicate.addProperty("charged", 1); if (key.equals("firework")) predicate.addProperty("firework", 1);
-                override(overrides, predicate, namespace + ":item/" + child);
+                override(overrides, predicate, "itemcontent:" + child);
             }
             model.add("overrides", overrides);
         }
@@ -84,8 +84,8 @@ final class ProjectResources {
             for (String face : List.of("top", "bottom", "side", "front", "back")) {
                 String source = item.textures.get(face);
                 if (source != null && !source.isBlank()) {
-                    copyPng(source, pack.resolve("assets/" + namespace + "/textures/block/" + path + "_" + face + ".png"));
-                    textures.put(face, namespace + ":block/" + path + "_" + face);
+                    copyPng(source, pack.resolve("assets/itemcontent/textures/block/" + generated(item.id) + face + ".png"));
+                    textures.put(face, "itemcontent:block/" + generated(item.id) + face);
                 } else textures.put(face, all);
             }
         }
@@ -124,6 +124,7 @@ final class ProjectResources {
             tags.computeIfAbsent("needs_" + List.of("", "stone", "iron", "diamond").get(level) + "_tool", k -> new ArrayList<>()).add(item.id);
         }
     }
+    private static String generated(String itemId) { return ResourcePaths.prefix("generated", itemId); }
     private static JsonObject cuboid(int[] from, int[] to) {
         JsonObject element = new JsonObject(); element.add("from", JSON.toJsonTree(from)); element.add("to", JSON.toJsonTree(to));
         JsonObject faces = new JsonObject(); for (String direction : List.of("up", "down", "north", "south", "east", "west")) { JsonObject face = new JsonObject(); face.addProperty("texture", "#" + direction); faces.add(direction, face); }
@@ -133,7 +134,7 @@ final class ProjectResources {
     private static JsonObject model(String parent, Map<String, String> textures) { JsonObject value = new JsonObject(); value.addProperty("parent", parent); if (!textures.isEmpty()) value.add("textures", JSON.toJsonTree(textures)); return value; }
     private static void copyPng(String source, Path target) throws IOException {
         Path input = Path.of(source == null ? "" : source); ItemProject.validatePng(input);
-        Files.createDirectories(target.getParent()); Files.copy(input, target, StandardCopyOption.REPLACE_EXISTING);
+        Files.createDirectories(target.getParent()); Files.copy(input, target);
     }
-    private static void json(Path file, JsonElement value) throws IOException { Files.createDirectories(file.getParent()); Files.writeString(file, JSON.toJson(value)); }
+    private static void json(Path file, JsonElement value) throws IOException { Files.createDirectories(file.getParent()); Files.writeString(file, JSON.toJson(value), StandardOpenOption.CREATE_NEW); }
 }
