@@ -26,6 +26,22 @@ tasks.named('jar') {
 
 sourceSets.main.java.srcDir '../common/src/main/java'
 
+// The ready editor embeds already-compiled registration code. Users need no build toolchain.
+tasks.register('prepareStandaloneRuntime', Exec) {
+    workingDir file('..')
+    inputs.files(fileTree('../src/main'), fileTree('../common/src/main'), fileTree('../standalone-runtime'), file('../standalone-runtime.gradle'), file('../build.gradle'), file('../gradle.properties'))
+    outputs.file(file("../build/standalone-runtime/itemcontent-generated-runtime-${version}.jar"))
+    def wrapper = System.getProperty('os.name').startsWith('Windows') ? 'gradlew.bat' : './gradlew'
+    commandLine wrapper, 'remapGeneratedRuntimeJar', '--no-daemon'
+    if (gradle.startParameter.offline) args '--offline'
+}
+tasks.named('processResources') {
+    dependsOn 'prepareStandaloneRuntime'
+    from("../build/standalone-runtime/itemcontent-generated-runtime-${version}.jar") {
+        into 'dev/itemcontent/editor'; rename { 'standalone-runtime.jar' }
+    }
+}
+
 // Exports the real native-model example through the same code used by the UI.
 tasks.register('exportModelFixture', JavaExec) {
     dependsOn testClasses
@@ -33,4 +49,18 @@ tasks.register('exportModelFixture', JavaExec) {
     mainClass = 'dev.itemcontent.editor.NativeModelFixture'
     args file('..').absolutePath, file('../build/native-model-fixture').absolutePath
     doFirst { delete file('../build/native-model-fixture') }
+}
+tasks.register('exportStandaloneFixture', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.itemcontent.editor.StandaloneFixture'
+    args file('..').absolutePath, file('../build/standalone-fixture').absolutePath
+    doFirst { delete file('../build/standalone-fixture') }
+}
+tasks.register('previewModBuilder', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.itemcontent.editor.ModBuilderPreview'
+    systemProperty 'flatlaf.uiScale', project.findProperty('testUiScale') ?: '1'
+    args file('../examples/content-types.icproject').absolutePath, file('../build/mod-builder.png').absolutePath
 }

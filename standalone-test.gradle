@@ -1,0 +1,61 @@
+tasks.register('prepareStandaloneServer') {
+    doLast {
+        if (project.findProperty('standaloneAcceptance')?.toString() != 'true') throw new GradleException('Use -PstandaloneAcceptance=true to exclude Item Content from the game classpath')
+        if (project.findProperty('acceptMinecraftEula')?.toString() != 'true') throw new GradleException('Accept EULA with -PacceptMinecraftEula=true')
+        def root = file('build/standalone-server'); root.mkdirs()
+        new File(root, 'eula.txt').text = 'eula=true\n'
+        new File(root, 'server.properties').text = 'server-ip=127.0.0.1\nserver-port=0\nonline-mode=false\nlevel-type=minecraft:flat\ngenerate-structures=false\nview-distance=2\nsimulation-distance=2\n'
+        copy { from 'build/standalone-fixture'; include '*.jar'; into new File(root, 'mods') }
+        delete new File(root, 'standalone-server-result.txt')
+    }
+}
+tasks.named('runStandaloneServer') {
+    dependsOn standaloneTestClasses, prepareStandaloneServer
+    doLast {
+        def report = file('build/standalone-server/standalone-server-result.txt')
+        if (!report.exists() || !report.text.startsWith('PASS ')) throw new GradleException('Standalone server failed; inspect its latest.log')
+        println report.text
+    }
+}
+tasks.register('prepareStandaloneClient') {
+    dependsOn runStandaloneServer
+    doLast {
+        def root = file('build/standalone-client'); root.mkdirs()
+        copy { from 'build/standalone-fixture'; include '*.jar'; into new File(root, 'mods') }
+        copy { from 'build/standalone-server/world'; into new File(root, 'saves/testworld') }
+        new File(root, 'options.txt').text = 'resourcePacks:["vanilla","fabric"]\nlang:ru_ru\nrenderDistance:2\nsimulationDistance:5\nmaxFps:60\nonboardAccessibility:false\n'
+        delete new File(root, 'standalone-client-result.txt')
+    }
+}
+tasks.named('runStandaloneClient') {
+    dependsOn standaloneTestClasses, prepareStandaloneClient
+    doLast {
+        def report = file('build/standalone-client/standalone-client-result.txt')
+        if (!report.exists() || !report.text.startsWith('PASS ')) throw new GradleException('Standalone client failed; inspect its latest.log')
+        println report.text
+    }
+}
+
+tasks.register('prepareStandaloneCoexistServer') {
+    dependsOn remapJar
+    doLast {
+        if (project.findProperty('standaloneAcceptance')?.toString() != 'true' || project.findProperty('acceptMinecraftEula')?.toString() != 'true')
+            throw new GradleException('Use -PstandaloneAcceptance=true -PacceptMinecraftEula=true')
+        def root = file('build/standalone-coexist-server'); root.mkdirs()
+        new File(root, 'eula.txt').text = 'eula=true\n'
+        new File(root, 'server.properties').text = 'server-ip=127.0.0.1\nserver-port=0\nonline-mode=false\nlevel-type=minecraft:flat\ngenerate-structures=false\nview-distance=2\nsimulation-distance=2\n'
+        copy { from 'build/standalone-fixture'; include '*.jar'; into new File(root, 'mods') }
+        copy { from tasks.remapJar.archiveFile; into new File(root, 'mods') }
+        def config = new File(root, 'config/item-content'); config.mkdirs()
+        new File(config, 'items.json').text = '{"version":2,"items":[{"id":"itemcontent:coexist_probe","name":"Working list item","appearance":"minecraft:iron_ingot"}]}'
+        delete new File(root, 'standalone-server-result.txt')
+    }
+}
+tasks.named('runStandaloneCoexistServer') {
+    dependsOn standaloneTestClasses, prepareStandaloneCoexistServer
+    doLast {
+        def report = file('build/standalone-coexist-server/standalone-server-result.txt')
+        if (!report.exists() || !report.text.startsWith('PASS ')) throw new GradleException('Coexistence server failed; inspect its latest.log')
+        println report.text
+    }
+}

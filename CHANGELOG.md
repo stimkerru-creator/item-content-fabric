@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.4.0
+
+- Build standalone Fabric mod JARs with only selected items and their resources.
+- Include the required registration code; players no longer need Item Content or its editor/configs.
+- Set the generated mod's name, stable namespace and version in a selection table.
+- Embed models, textures and mining tags directly in the mod; no manual resource-pack setup.
+- Isolate the generated runtime from Item Content and share it across authored mods through Fabric nested JARs.
+- Preserve mod metadata and item selection in editor documents.
+- Keep the original working-list installation mode in the File menu.
+- Add explicit dependencies and reject unsupported third-party provider code rather than silently losing behavior.
+- Add 4000-to-200 selection/export and two independent mod client/server acceptance checks.
+
 ## 1.3.1
 
 - Isolate generated bow/crossbow models and block face textures; fail on duplicate export paths.

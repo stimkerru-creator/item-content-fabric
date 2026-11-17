@@ -1,6 +1,7 @@
 """Verify and package only the current release artifacts; never include game data."""
 from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED
+from io import BytesIO
 import hashlib
 import json
 import argparse
@@ -37,6 +38,15 @@ with ZipFile(editor) as jar:
     assert "META-INF/licenses/Apache-2.0.txt" in jar.namelist(), "Missing Gson license"
     assert int.from_bytes(jar.read("dev/itemcontent/editor/ItemContentEditor.class")[6:8], "big") == 61
     assert not any(name.startswith(("net/minecraft/", "net/fabricmc/", "dev/itemparams/")) for name in jar.namelist())
+    assert "dev/itemcontent/editor/StandaloneMod.class" in jar.namelist()
+    with ZipFile(BytesIO(jar.read("dev/itemcontent/editor/standalone-runtime.jar"))) as runtime_jar:
+        runtime_meta = json.loads(runtime_jar.read("fabric.mod.json"))
+        assert runtime_meta["id"] == "itemcontent_generated_runtime" and runtime_meta["version"] == VERSION
+        assert "itemcontent-generated-refmap.json" in runtime_jar.namelist()
+        assert "dev/itemcontent/generated/EmbeddedContent.class" in runtime_jar.namelist()
+        assert not any(name.startswith(("dev/itemcontent/editor/", "dev/itemcontent/catalog/", "dev/itemcontent/generated/catalog/", "net/minecraft/")) for name in runtime_jar.namelist())
+        assert "LICENSE-item-content.txt" in runtime_jar.namelist()
+        assert int.from_bytes(runtime_jar.read("dev/itemcontent/generated/EmbeddedContent.class")[6:8], "big") == 61
 
 out = ROOT / "build/distributions"
 out.mkdir(parents=True, exist_ok=True)
@@ -58,8 +68,11 @@ Windows: extract the whole ZIP, then open run-editor.bat. Java 17+ is required.
 Other systems: java -jar lib/item-content-editor-""" + VERSION + """.jar
 No JDK or Gradle is needed to run this prebuilt editor.
 Open examples/steel-plate.icproject for a working example.
-Follow docs/editor.md for images, export and installation.
-mods/ contains the Fabric mod for client and server; it is not a desktop application.
+Choose Build mod in the editor, select only the items you need, and save your JAR.
+Install that JAR in mods on clients/server with Minecraft 1.20.1 Fabric and Fabric API.
+Models/textures are included. Players do not need the editor or original Item Content.
+Follow docs/editor.md for models, export and installation.
+mods/ contains the optional Item Content working-list loader, not the desktop app.
 Item Content works independently. Custom numeric stats and recipes are not part of this tool.
 """)
 packages = [mod, editor, archive]
@@ -78,7 +91,9 @@ if args.windows_runtime:
 
 1. Extract the ENTIRE ZIP into a writable folder.
 2. Open run-editor.bat. Java is included; no Java installation, JDK or Gradle is needed.
-3. Use the editor's Install in Minecraft action for your game instance.
+3. Create items, choose Build mod, select the items you need, and save the JAR.
+   Install your JAR in mods with Minecraft 1.20.1 Fabric and Fabric API.
+   Models/textures are included. Players do not need the editor or Item Content.
 4. For examples and illustrated steps see docs/editor.md and examples/.
 
 Do not select GitHub's Source code ZIP to install the editor.

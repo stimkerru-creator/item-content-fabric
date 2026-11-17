@@ -16,7 +16,7 @@ tasks.withType(Test).configureEach { useJUnitPlatform() }
 // against the real runtime loader without bundling Swing into the Fabric JAR.
 sourceSets.test.java.srcDir 'editor/src/main/java'
 sourceSets.test.resources.srcDir 'editor/src/main/resources'
-sourceSets.test.java.exclude '**/ItemContentEditor.java', '**/EditorTheme.java', '**/CatalogDialog.java', '**/BehaviorForm.java', '**/GameInstallation.java', '**/InstallationDialog.java'
+sourceSets.test.java.exclude '**/ItemContentEditor.java', '**/EditorTheme.java', '**/CatalogDialog.java', '**/BehaviorForm.java', '**/GameInstallation.java', '**/InstallationDialog.java', '**/ModBuildDialog.java'
 
 // Include our license in the distributed mod, alongside Minecraft-provided dependencies.
 tasks.named('jar') {
@@ -30,6 +30,7 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 sourceSets.main.java.srcDir 'common/src/main/java'
+apply from: 'standalone-runtime.gradle'
 
 // Opt-in isolated real-game test. The fixture/provider never enters the release JAR.
 sourceSets {
@@ -39,6 +40,12 @@ sourceSets {
         compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
         runtimeClasspath += output + sourceSets.main.runtimeClasspath
     }
+    standaloneTest {
+        java.srcDir 'standalone-test/src/main/java'
+        resources.srcDir 'standalone-test/src/main/resources'
+        compileClasspath += sourceSets.main.compileClasspath
+        runtimeClasspath += configurations.runtimeClasspath
+    }
 }
 tasks.register('integrationTestJar', Jar) {
     dependsOn integrationTestClasses
@@ -47,10 +54,28 @@ tasks.register('integrationTestJar', Jar) {
     from sourceSets.integrationTest.output
 }
 loom.mods {
-    itemcontent { sourceSet sourceSets.main }
-    itemcontent_integration { sourceSet sourceSets.integrationTest }
+    if (project.findProperty('standaloneAcceptance')?.toString() == 'true') {
+        standalone_probe { sourceSet sourceSets.standaloneTest }
+    } else {
+        itemcontent { sourceSet sourceSets.main }
+        itemcontent_integration { sourceSet sourceSets.integrationTest }
+    }
 }
 loom.runs {
+    standaloneServer {
+        server(); source sourceSets.standaloneTest
+        runDir 'build/standalone-server'
+    }
+    standaloneClient {
+        client(); source sourceSets.standaloneTest
+        runDir 'build/standalone-client'
+        programArgs '--quickPlaySingleplayer', 'testworld', '--width', '1280', '--height', '720'
+    }
+    standaloneCoexistServer {
+        server(); source sourceSets.standaloneTest
+        runDir 'build/standalone-coexist-server'
+        vmArg '-Ditemcontent.testCoexist=true'
+    }
     integrationClient {
         client()
         source sourceSets.integrationTest
@@ -65,6 +90,7 @@ loom.runs {
         runDir 'build/integration-server'
     }
 }
+apply from: 'standalone-test.gradle'
 tasks.register('prepareIntegrationServer') {
     doLast {
         def root = file('build/integration-server'); root.mkdirs()

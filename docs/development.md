@@ -25,7 +25,7 @@ ZIP содержит готовый редактор в `lib`, мод в `mods`,
 В Windows запускайте `run-editor.bat` после распаковки всей папки. На Linux/macOS:
 
 ```text
-java -jar lib/item-content-editor-1.3.1.jar
+java -jar lib/item-content-editor-1.4.0.jar
 ```
 
 GitHub Actions повторяет сборку на Java 17 и прикладывает артефакты к запуску workflow.
@@ -75,7 +75,7 @@ Swing/FlatLaf не входят в Minecraft JAR; тестовые постав�
 Для снимков редактора:
 
 ```text
-java -jar editor/build/libs/item-content-editor-1.3.1.jar --screenshot build/editor.png 1280 680 --open examples/content-types.icproject --select itemcontent:bronze_sword --behavior
+java -jar editor/build/libs/item-content-editor-1.4.0.jar --screenshot build/editor.png 1280 680 --open examples/content-types.icproject --select itemcontent:bronze_sword --behavior
 ```
 
 UI-тесты проходят при масштабах 1, 1.25 и 1.5. Они проверяют видимость действий и высоту полей,
@@ -98,7 +98,7 @@ Native Windows regression check (opens temporary test windows):
 ```powershell
 python tools/prepare-windows-runtime.py
 python tools/package-release.py --windows-runtime "build/windows-runtime/jdk-17.0.21+9-jre"
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/check-windows-release.ps1 -Archive build/distributions/item-content-1.3.1-windows-x64.zip
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/check-windows-release.ps1 -Archive build/distributions/item-content-1.4.0-windows-x64.zip
 ```
 
 Скрипт runtime использует закреплённую версию Temurin и проверяет SHA-256 обоих архивов.
@@ -122,3 +122,36 @@ Workflow **Ready-to-run release** собирает Windows-комплект и �
 `exportModelFixture` использует тот же импорт/экспорт, что и интерфейс, и только заменяет свою
 папку `build/native-model-fixture`. Клиент проверяет геометрию, загрузку текстур в атлас,
 модель блока и переключение собственной модели лука при натяжении.
+
+
+## Самостоятельные моды
+
+`standalone-runtime.gradle` компилирует существующие реализации предметов в изолированное
+пространство `dev.itemcontent.generated`, убирая каталог и чтение рабочего списка при запуске.
+Новые методы mixin получают отдельный префикс, refmap штатно создаёт Loom. Выполняется один раз
+при сборке редактора; готовый remapped JAR включается в редактор как `standalone-runtime.jar`.
+
+Экспорт пишет Fabric metadata, только выбранные описания, их ресурсы и вложенную библиотеку
+регистрации. Fabric дедуплицирует одну библиотеку при установке нескольких созданных модов.
+Оригинальный мод `itemcontent` не является зависимостью. Произвольный Java-код не загружается
+редактором и не компилируется на машине автора. Данные остаются отдельными от вычислителя параметров.
+
+Проверка без исходного Item Content в classpath:
+
+```powershell
+.\gradlew.bat -p editor exportStandaloneFixture --no-daemon
+.\gradlew.bat runStandaloneClient --no-daemon -PstandaloneAcceptance=true -PacceptMinecraftEula=true
+```
+
+Fixture создаёт список из 4000 записей, собирает выбранные 200 строк и отдельный второй мод с 1 предметом.
+Тестовый сервер и клиент находятся в `build/standalone-server` / `build/standalone-client`.
+Они проверяют реальные готовые JAR из папки mods, а не исходники runtime в dev classpath.
+
+Отдельная проверка совместной установки с исходным Item Content:
+
+```powershell
+.\gradlew.bat build --no-daemon
+.\gradlew.bat runStandaloneCoexistServer --no-daemon -PstandaloneAcceptance=true -PacceptMinecraftEula=true
+```
+
+Её мир и конфигурация находятся в `build/standalone-coexist-server`.

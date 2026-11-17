@@ -1,5 +1,32 @@
 # Validation record
 
+## 1.4.0 — 2026-11-17
+
+- Desktop: **70 tests**, zero failures, including saved selection, exact **4000 → 200** export,
+  subset references, final namespaces, native resources, overwrite refusal and dependency validation.
+  The suite also passed at UI scale **1.5**.
+- Runtime/export loader: **14 tests**, zero failures, including the existing **48 native model fixtures**.
+- Real Minecraft 1.20.1 / Fabric: **13 standalone server checks PASS**. Two generated JARs load
+  without Item Content: the first includes 199 selected new items and one existing-item edit,
+  the second one new item. Unselected entries are absent from the registry. Native sword, food,
+  bow/crossbow, placed block, embedded mining tags and a custom creative group work.
+- Real standalone client: **7 item models PASS**, including imported 3D geometry and textures,
+  the bow's use-state override and a placed 3D block. No separate resource pack, external config
+  or editor catalog is required or created.
+- Separate coexistence server: **13 checks PASS** with both generated mods and the original
+  Item Content installed; the original working-list item is registered independently.
+- The generated runtime has its own package, mixin prefixes and refmap. Build-time checks reject
+  a source change that would restore the authoring config/catalog startup path.
+- The build dialog was rendered and visually checked at **884×651**: the selection table, search,
+  selected count and build/cancel actions are visible. Both editor and build-dialog screenshots
+  in the documentation come from actual Swing rendering.
+- Windows ZIP: extracted into a path with spaces, Java removed from PATH and invalid JAVA_HOME;
+  the bundled Java launched the editor and built a three-item native-model JAR without a compiler.
+  A second export respected the saved selection and contained exactly one item.
+- All worlds and generated fixtures remain inside this project's `build/` directory.
+  Third-party executable providers are explicitly rejected by standalone export; arbitrary modpack
+  compatibility is not claimed.
+
 ## 1.3.1 — 2026-11-16
 
 - Desktop: **63 JUnit Platform tests**, zero failures at UI scales **1 and 1.5**.

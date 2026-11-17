@@ -19,6 +19,16 @@ import static dev.itemcontent.editor.EditorTheme.*;
 /** Item-first editor. Persistence and runtime formats remain in ItemProject. */
 public final class ItemContentEditor {
     public static void main(String[] args) {
+        if (args.length == 6 && args[0].equals("--build-mod")) {
+            try {
+                ItemProject project = ItemProject.load(Path.of(args[1]));
+                Set<String> selection = new LinkedHashSet<>();
+                project.items.forEach(item -> { if (project.modItems == null || project.modItems.contains(item.id)) selection.add(item.id); });
+                StandaloneMod.Result result = StandaloneMod.build(project, selection, new StandaloneMod.Settings(args[2], args[3], args[4], Set.copyOf(project.requiredMods)), Path.of(args[5]));
+                System.out.println("Built " + result.items() + " entries: " + result.jar());
+            } catch (Exception failure) { failure.printStackTrace(); System.exit(1); }
+            return;
+        }
         EditorTheme.setup();
         SwingUtilities.invokeLater(() -> {
             EditorPanel panel = new EditorPanel();
@@ -162,13 +172,14 @@ public final class ItemContentEditor {
             JPopupMenu menu = new JPopupMenu();
             menu(menu, "Открыть список предметов…", "openProject", this::open);
             menu(menu, "Подключить сборку Minecraft…", "openCatalog", this::openCatalog);
+            menu(menu, "Установить рабочий список через Item Content…", "installWorkingList", this::install);
             menu(menu, "Экспортировать файлы для переноса…", "exportFiles", this::export);
             menu(menu, "Сохранить список как…", "saveAs", () -> saveAs()); menu.addSeparator();
             menu(menu, "Новый список предметов…", "newProject", () -> { if (mayDiscard()) reset(); });
             menu.addSeparator(); menu(menu, "Как пользоваться", "help", this::help);
             file.addActionListener(e -> menu.show(file, 0, file.getHeight()));
             button(actions, "Сохранить", "saveProject", () -> save());
-            JButton prepare = button(actions, "Установить в Minecraft…", "export", this::install); primary(prepare);
+            JButton prepare = button(actions, "Собрать мод…", "export", this::buildMod); primary(prepare);
             bar.add(actions, BorderLayout.EAST); return bar;
         }
         private JPanel sidebar() {
@@ -546,6 +557,10 @@ public final class ItemContentEditor {
             commit(); project.validate();
             new InstallationDialog(this, project).setVisible(true);
         }
+        private void buildMod() {
+            commit();
+            new ModBuildDialog(this, project, () -> { dirty = true; updateSaveState(); }).setVisible(true);
+        }
         private void export() {
             guarded(() -> {
                 commit(); project.validate(); JFileChooser chooser = chooser("Экспорт комплекта для переноса — выберите новую или пустую папку", true);
@@ -581,9 +596,10 @@ public final class ItemContentEditor {
                     + "3. В «Название и внешний вид» импортируйте модель Minecraft, добавьте простую текстуру или выберите образец из игры.\n"
                     + "4. В «Свойства в игре» задайте урон, прочность или другие свойства выбранного типа.\n"
                     + "5. «Сохранить» запоминает весь список для дальнейшего редактирования.\n"
-                    + "6. «Установить в Minecraft» записывает мод, настройки и текстуры в выбранную папку игры.\n\n"
-                    + "Список предметов — ваши сохранённые настройки. Новый мод при этом не создаётся.\n"
-                    + "Один мод Item Content загружает все подготовленные вами предметы.\n\n"
+                    + "6. «Собрать мод…» открывает выбор предметов. Укажите название и ID своего мода, отметьте нужные строки.\n"
+                    + "7. «Собрать JAR…» сохраняет мод с выбранными предметами, моделями и текстурами.\n"
+                    + "8. Положите JAR в mods клиента и сервера с Minecraft 1.20.1 / Fabric и Fabric API.\n\n"
+                    + "Редактор и отдельный Item Content игрокам не нужны. Остальные предметы списка в мод не попадут.\n\n"
                     + "Подробная инструкция: docs/editor.md.", "Как создать предмет", JOptionPane.INFORMATION_MESSAGE);
         }
         private JPanel selector(String title, JComponent input) {

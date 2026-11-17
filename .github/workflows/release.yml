@@ -20,7 +20,8 @@ jobs:
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
       - run: .\gradlew.bat build --no-daemon
-      - run: .\gradlew.bat -p editor build --no-daemon
+      - run: .\gradlew.bat -p editor build exportStandaloneFixture --no-daemon
+      - run: .\gradlew.bat runStandaloneServer --no-daemon -PstandaloneAcceptance=true -PacceptMinecraftEula=true
       - run: python tools/prepare-windows-runtime.py
       - name: Package the editor, mod, resources and Java
         shell: pwsh

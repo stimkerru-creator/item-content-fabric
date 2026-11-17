@@ -1,0 +1,67 @@
+// Compile the same native implementations into an isolated package once at editor build time.
+// The end-user editor ships this ready runtime and never invokes javac, Gradle or a network service.
+def generatedSources = layout.buildDirectory.dir('generated/standalone-sources')
+tasks.register('generateStandaloneSources', Sync) {
+    inputs.file 'standalone-runtime.gradle'
+    from('src/main/java') { exclude 'dev/itemcontent/catalog/**' }
+    from('common/src/main/java')
+    into generatedSources
+    includeEmptyDirs = false
+    eachFile { detail -> detail.path = detail.path.replace('dev/itemcontent/', 'dev/itemcontent/generated/') }
+    filter { String line ->
+        line = line.replace('dev.itemcontent.', 'dev.itemcontent.generated.').replace('dev.itemcontent;', 'dev.itemcontent.generated;').replace('itemcontent$', 'generateditemcontent$')
+        if (line.contains('import dev.itemcontent.generated.catalog.') || line.contains('ClientCatalog.register();')) return ''
+        line = line.replace('var config = ItemContentConfig.loadDocument();', 'var config = dev.itemcontent.generated.EmbeddedContent.loadDocument();')
+        line = line.replace('"itemcontent:extensions"', '"itemcontent_generated:extensions"')
+        line = line.replace('!id.getNamespace().equals("itemcontent")', '!dev.itemcontent.generated.EmbeddedContent.allowedNamespace(id.getNamespace())')
+        line = line.replace('!id.startsWith("itemcontent:")', '!dev.itemcontent.generated.EmbeddedContent.allowedNamespace(id.substring(0, id.indexOf(\':\')))')
+        return line
+    }
+    doLast {
+        def root = generatedSources.get().asFile
+        def checks = [
+            'dev/itemcontent/generated/ItemContentMod.java': 'var config = dev.itemcontent.generated.EmbeddedContent.loadDocument();',
+            'dev/itemcontent/generated/config/ItemSpec.java': '!dev.itemcontent.generated.EmbeddedContent.allowedNamespace(id.getNamespace())',
+            'dev/itemcontent/generated/config/ItemContentConfig.java': '!dev.itemcontent.generated.EmbeddedContent.allowedNamespace(id.substring(0, id.indexOf(\':\')))'
+        ]
+        checks.each { path, expected ->
+            if (!new File(root, path).text.contains(expected)) throw new GradleException("Standalone source adaptation no longer matches: ${path}")
+        }
+        if (new File(root, 'dev/itemcontent/generated/ItemContentMod.java').text.contains('ItemContentConfig.loadDocument()') ||
+            new File(root, 'dev/itemcontent/generated/ItemContentClient.java').text.contains('ClientCatalog') ||
+            new File(root, 'dev/itemcontent/generated/catalog').exists()) throw new GradleException('Authoring config/catalog leaked into standalone startup')
+    }
+}
+sourceSets {
+    generatedRuntime {
+        java.srcDir generatedSources
+        java.srcDir 'standalone-runtime/src/main/java'
+        resources.srcDir 'standalone-runtime/src/main/resources'
+        compileClasspath += sourceSets.main.compileClasspath
+        runtimeClasspath += sourceSets.main.runtimeClasspath
+    }
+}
+loom.mixin.add(sourceSets.main, 'itemcontent-refmap.json')
+loom.mixin.add(sourceSets.generatedRuntime, 'itemcontent-generated-refmap.json')
+tasks.named('compileGeneratedRuntimeJava') { dependsOn 'generateStandaloneSources' }
+tasks.named('processGeneratedRuntimeResources') {
+    inputs.property 'version', project.version
+    filesMatching('fabric.mod.json') { expand version: project.version }
+}
+def runtimeJar = tasks.register('generatedRuntimeJar', Jar) {
+    dependsOn generatedRuntimeClasses
+    archiveBaseName = 'itemcontent-generated-runtime'
+    archiveClassifier = 'dev'
+    destinationDirectory = layout.buildDirectory.dir('standalone-runtime')
+    from sourceSets.generatedRuntime.output
+    from('LICENSE') { rename { 'LICENSE-item-content.txt' } }
+    from('THIRD-PARTY-NOTICES.txt')
+}
+tasks.register('remapGeneratedRuntimeJar', tasks.named('remapJar').get().getClass().getSuperclass()) {
+    dependsOn runtimeJar
+    inputFile = runtimeJar.flatMap { it.archiveFile }
+    archiveBaseName = 'itemcontent-generated-runtime'
+    archiveClassifier = ''
+    destinationDirectory = layout.buildDirectory.dir('standalone-runtime')
+    addNestedDependencies = false
+}

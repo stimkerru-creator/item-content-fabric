@@ -17,6 +17,9 @@ public final class ItemProject {
     public final List<Entry> items = new ArrayList<>();
     public final List<TypeDefinition> extensionTypes = new ArrayList<>();
     public final List<GameCatalog.Group> groups = new ArrayList<>();
+    public String modId = "my_items", modName = "Мои предметы", modVersion = "1.0.0";
+    public List<String> modItems; // null means all; an explicit empty list means none.
+    public List<String> requiredMods = new ArrayList<>();
     public Map<String, TypeDefinition> types() {
         Map<String, TypeDefinition> result = BuiltinTypes.index();
         for (var type : extensionTypes) if (result.putIfAbsent(type.id(), type) != null) throw new IllegalArgumentException("Повтор типа: " + type.id());
@@ -107,6 +110,9 @@ public final class ItemProject {
         JsonObject root = new JsonObject(); root.addProperty("editorVersion", 3);
         root.add("items", JSON.toJsonTree(items));
         root.add("types", JSON.toJsonTree(extensionTypes)); root.add("groups", JSON.toJsonTree(groups));
+        root.addProperty("modId", modId); root.addProperty("modName", modName); root.addProperty("modVersion", modVersion);
+        if (modItems != null) root.add("modItems", JSON.toJsonTree(modItems));
+        root.add("requiredMods", JSON.toJsonTree(requiredMods));
         String text = JSON.toJson(root);
         if (text.getBytes(StandardCharsets.UTF_8).length > MAX_BYTES) throw new IOException("Список предметов больше 48 МиБ.");
         if (legacyDocument != null) {
@@ -126,6 +132,11 @@ public final class ItemProject {
             if (version != 1 && version != 2 && version != 3) throw new IOException("Эта версия списка предметов не поддерживается.");
             Entry[] entries = JSON.fromJson(root.get("items"), Entry[].class);
             ItemProject result = new ItemProject(); result.items.addAll(Arrays.asList(entries));
+            if (root.has("modId")) result.modId = root.get("modId").getAsString();
+            if (root.has("modName")) result.modName = root.get("modName").getAsString();
+            if (root.has("modVersion")) result.modVersion = root.get("modVersion").getAsString();
+            if (root.has("modItems")) result.modItems = new ArrayList<>(Arrays.asList(JSON.fromJson(root.get("modItems"), String[].class)));
+            if (root.has("requiredMods")) result.requiredMods = new ArrayList<>(Arrays.asList(JSON.fromJson(root.get("requiredMods"), String[].class)));
             if (root.has("types")) result.extensionTypes.addAll(Arrays.asList(JSON.fromJson(root.get("types"), TypeDefinition[].class)));
             if (root.has("groups")) result.groups.addAll(Arrays.asList(JSON.fromJson(root.get("groups"), GameCatalog.Group[].class)));
             result.validate();

@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"standalone_probe","version":"1","environment":"*","entrypoints":{"main":["dev.standaloneprobe.ServerProbe"],"client":["dev.standaloneprobe.ClientProbe"]},"depends":{"fabricloader":">=0.15.11","minecraft":"1.20.1","fabric-api":"*"}}
