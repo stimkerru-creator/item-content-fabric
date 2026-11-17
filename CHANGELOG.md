@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.4.1
+
+- Reuse one editor window per user; forward subsequent launches and file opens without discarding unsaved edits.
+- Release the instance lock on normal exit and recover automatically after a process crash.
+- Fix imported partial block models hiding adjacent terrain faces and producing full-cube darkening.
+- Configure occlusion per block: automatic, full opaque cube, or keep neighbouring faces visible.
+- Preserve ordinary cube face culling, physical collision and existing configuration/API compatibility.
+- Export an explicit occlusion mode for imported models versus generated cubes.
+- Add export regressions and real-game checks for all six neighbour directions.
+
 ## 1.4.0
 
 - Build standalone Fabric mod JARs with only selected items and their resources.

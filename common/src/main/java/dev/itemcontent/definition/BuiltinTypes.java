@@ -47,7 +47,9 @@ public final class BuiltinTypes {
                 integer("enchantability", "Зачаровываемость", 9, 0, 100, false, ""),
                 choice("armor_texture", "Текстура надетой брони", "iron", List.of("leather", "chainmail", "iron", "gold", "diamond", "netherite", "custom"), false, "Для custom выберите обе PNG-слоя брони во внешнем виде."),
                 identifier("repair_item", "Предмет для ремонта", "minecraft:iron_ingot", false, "")), "PNG иконки и изображение надетой брони задаются отдельно."));
-        var blockProperties = List.of(number("hardness", "Твёрдость блока", 1.5, 0, 100000, false, "Влияет на время разрушения."),
+        var blockProperties = List.of(choice("occlusion", "Скрывать грани соседних блоков", "auto", List.of("auto", "solid", "open"), false,
+                        "Автоматически: импортированная модель не скрывает соседей, обычный куб скрывает. Для импортированного полного непрозрачного куба выберите «Полный непрозрачный куб». Форма столкновений от этого выбора не меняется."),
+                number("hardness", "Твёрдость блока", 1.5, 0, 100000, false, "Влияет на время разрушения."),
                 number("resistance", "Взрывоустойчивость", 6, 0, 3600000, false, ""),
                 integer("light", "Излучаемый свет", 0, 0, 15, false, ""),
                 choice("sound", "Звук блока", "stone", List.of("stone", "wood", "metal", "glass", "gravel", "wool"), false, ""),

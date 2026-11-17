@@ -38,8 +38,10 @@ public final class BuiltinFactory implements ContentFactory {
                 var blockSettings = AbstractBlock.Settings.create().strength(spec.number("hardness"), spec.number("resistance"))
                         .luminance(state -> spec.integer("light")).sounds(sound(spec.text("sound")));
                 if (spec.integer("mining_level") > 0) blockSettings.requiresTool();
-                if (type.equals("decorative_chest")) blockSettings.nonOpaque();
-                Block block = new ContentBlock(blockSettings, !type.equals("block"), type.equals("decorative_chest"));
+                String occlusion = spec.properties().has("occlusion") ? spec.text("occlusion") : "auto";
+                boolean open = occlusion.equals("open") || occlusion.equals("auto") && (spec.customModel() || type.equals("decorative_chest"));
+                if (open) blockSettings.nonOpaque();
+                Block block = new ContentBlock(blockSettings, !type.equals("block"), type.equals("decorative_chest"), !open);
                 return new CreatedContent(new BlockItem(block, settings), block);
             }
             default -> throw new IllegalArgumentException("Unknown builtin content type: " + type);

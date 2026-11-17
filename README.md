@@ -10,7 +10,7 @@
 
 ## Скачать и запустить
 
-**[Скачать готовый редактор для Windows x64 — Java уже включена](https://github.com/stimkerru-creator/item-content-fabric/releases/latest/download/item-content-1.4.0-windows-x64.zip)**
+**[Скачать готовый редактор для Windows x64 — Java уже включена](https://github.com/stimkerru-creator/item-content-fabric/releases/latest/download/item-content-1.4.1-windows-x64.zip)**
 
 Распакуйте **весь архив** в удобную папку и откройте **run-editor.bat**.
 Устанавливать Java, Gradle или собирать проект не нужно. Кнопка GitHub **Code → Download ZIP**

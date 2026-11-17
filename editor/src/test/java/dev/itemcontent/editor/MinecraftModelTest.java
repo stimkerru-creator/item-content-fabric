@@ -94,6 +94,18 @@ class MinecraftModelTest {
         assertEquals("itemcontent:block/new_item",json(assets.resolve("models/item/new_item.json")).get("parent").getAsString());
         assertTrue(Files.exists(assets.resolve("blockstates/new_item.json")));
         assertTrue(Files.exists(target.resolve("datapacks/item-content/data/minecraft/tags/blocks/needs_iron_tool.json")));
+        assertEquals("open",json(target.resolve("config/item-content/items.json")).getAsJsonArray("items").get(0).getAsJsonObject().getAsJsonObject("properties").get("occlusion").getAsString());
+    }
+    @Test void cubeAndImportedOcclusionDefaultsAndExplicitOverridesRemainIndependent() throws Exception {
+        var project=project(load(pack())); var item=project.items.get(0); item.type="itemcontent:block";
+        for (String mode : List.of("solid","open")) {
+            item.properties.addProperty("occlusion",mode); Path target=temp.resolve(mode); project.export(target);
+            assertEquals(mode,json(target.resolve("config/item-content/items.json")).getAsJsonArray("items").get(0).getAsJsonObject().getAsJsonObject("properties").get("occlusion").getAsString());
+        }
+        item.properties.remove("occlusion"); item.importedAppearance=false; item.importedModel=null;
+        Path target=temp.resolve("cube"); project.export(target);
+        assertEquals("solid",json(target.resolve("config/item-content/items.json")).getAsJsonArray("items").get(0).getAsJsonObject().getAsJsonObject("properties").get("occlusion").getAsString());
+        assertFalse(item.properties.has("occlusion"),"Export must not change the editor's automatic setting");
     }
     @Test void copiesAndDifferentItemsCannotOverwriteImportedAssets() throws Exception {
         var project=project(load(pack())); var second=project.items.get(0).copy(); second.id="itemcontent:new_item/child";

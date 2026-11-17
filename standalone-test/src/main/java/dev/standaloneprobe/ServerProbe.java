@@ -32,6 +32,19 @@ public final class ServerProbe implements ModInitializer {
                 var block = ((BlockItem)item("rough_cobblestone")).getBlock();
                 var world = server.getOverworld(); var pos = new BlockPos(0, 80, 0); world.setBlockState(pos, block.getDefaultState(), 3);
                 check(world.getBlockState(pos).isOf(block), "standalone placed block", passed);
+                var partial=((BlockItem)item("native_block")).getBlock().getDefaultState();
+                var cube=net.minecraft.block.Blocks.QUARTZ_BLOCK.getDefaultState();
+                world.setBlockState(pos.east(),partial,3);
+                check(!partial.isOpaque() && partial.getCullingShape(world,pos.east()).isEmpty(), "imported model does not occlude empty space", passed);
+                boolean partialFaces=true,solidFaces=true;
+                for(var direction:net.minecraft.util.math.Direction.values()) {
+                    var neighbour=pos.offset(direction); world.setBlockState(neighbour,partial,3);
+                    partialFaces &= net.minecraft.block.Block.shouldDrawSide(cube,world,pos,direction,neighbour);
+                    world.setBlockState(neighbour,block.getDefaultState(),3);
+                    solidFaces &= !net.minecraft.block.Block.shouldDrawSide(cube,world,pos,direction,neighbour);
+                }
+                check(partialFaces, "all six quartz faces remain visible beside imported model", passed);
+                check(solidFaces, "ordinary solid cube still hides all six internal faces", passed);
                 check(block.getDefaultState().isIn(BlockTags.PICKAXE_MINEABLE) && block.getDefaultState().isIn(BlockTags.NEEDS_STONE_TOOL), "mining tags loaded automatically from JAR", passed);
                 check(new ItemStack(Items.APPLE).getName().getString().equals("Standalone apple"), "embedded existing-item edit", passed);
                 ItemGroups.updateDisplayContext(world.getEnabledFeatures(), true, world.getRegistryManager());

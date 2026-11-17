@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Path;
+import java.nio.file.Files;
 import javax.swing.*;
 import java.awt.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -100,6 +101,22 @@ class EditorPanelTest {
             ((JRadioButton)find(panel,"ownTextureMode")).doClick();
             assertFalse(find(panel,"gameAppearanceSource").isVisible());
             assertEquals("12",attack.getText());
+        });
+    }
+
+    @Test void reopeningTheSameFileKeepsUnsavedEdits() throws Exception {
+        var project = new ItemProject(); project.items.add(new ItemProject.Entry());
+        Path file = temp.resolve("catalog.icproject"); project.save(file);
+        SwingUtilities.invokeAndWait(() -> {
+            try {
+                var panel = new ItemContentEditor.EditorPanel(); panel.openList(file);
+                var name = (JTextField) find(panel, "itemName"); name.setText("Несохранённая пластина");
+                panel.openRequested(file.getParent().resolve(".").resolve(file.getFileName()));
+                assertEquals("Несохранённая пластина", name.getText());
+                Files.delete(file);
+                panel.openRequested(file);
+                assertEquals("Несохранённая пластина", name.getText());
+            } catch (Exception failure) { throw new RuntimeException(failure); }
         });
     }
 

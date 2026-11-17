@@ -25,7 +25,7 @@ ZIP содержит готовый редактор в `lib`, мод в `mods`,
 В Windows запускайте `run-editor.bat` после распаковки всей папки. На Linux/macOS:
 
 ```text
-java -jar lib/item-content-editor-1.4.0.jar
+java -jar lib/item-content-editor-1.4.1.jar
 ```
 
 GitHub Actions повторяет сборку на Java 17 и прикладывает артефакты к запуску workflow.
@@ -75,7 +75,7 @@ Swing/FlatLaf не входят в Minecraft JAR; тестовые постав�
 Для снимков редактора:
 
 ```text
-java -jar editor/build/libs/item-content-editor-1.4.0.jar --screenshot build/editor.png 1280 680 --open examples/content-types.icproject --select itemcontent:bronze_sword --behavior
+java -jar editor/build/libs/item-content-editor-1.4.1.jar --screenshot build/editor.png 1280 680 --open examples/content-types.icproject --select itemcontent:bronze_sword --behavior
 ```
 
 UI-тесты проходят при масштабах 1, 1.25 и 1.5. Они проверяют видимость действий и высоту полей,
@@ -98,7 +98,7 @@ Native Windows regression check (opens temporary test windows):
 ```powershell
 python tools/prepare-windows-runtime.py
 python tools/package-release.py --windows-runtime "build/windows-runtime/jdk-17.0.21+9-jre"
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/check-windows-release.ps1 -Archive build/distributions/item-content-1.4.0-windows-x64.zip
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/check-windows-release.ps1 -Archive build/distributions/item-content-1.4.1-windows-x64.zip
 ```
 
 Скрипт runtime использует закреплённую версию Temurin и проверяет SHA-256 обоих архивов.

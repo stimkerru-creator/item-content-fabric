@@ -77,7 +77,8 @@ final class BehaviorForm extends JPanel {
         return result;
     }
     static String choiceLabel(String value) {
-        return switch(value) { case "helmet" -> "Шлем"; case "chestplate" -> "Нагрудник"; case "leggings" -> "Поножи"; case "boots" -> "Ботинки";
+        return switch(value) { case "auto" -> "Автоматически"; case "solid" -> "Полный непрозрачный куб"; case "open" -> "Не скрывать соседние грани";
+            case "helmet" -> "Шлем"; case "chestplate" -> "Нагрудник"; case "leggings" -> "Поножи"; case "boots" -> "Ботинки";
             case "stone" -> "Камень"; case "wood" -> "Дерево"; case "metal" -> "Металл"; case "glass" -> "Стекло"; case "gravel" -> "Гравий"; case "wool" -> "Шерсть";
             case "none" -> "Без инструмента"; case "pickaxe" -> "Кирка"; case "axe" -> "Топор"; case "shovel" -> "Лопата"; case "hoe" -> "Мотыга";
             case "leather" -> "Кожа"; case "chainmail" -> "Кольчуга"; case "iron" -> "Железо"; case "gold" -> "Золото"; case "diamond" -> "Алмаз"; case "netherite" -> "Незерит"; case "custom" -> "Своя текстура"; default -> value; };

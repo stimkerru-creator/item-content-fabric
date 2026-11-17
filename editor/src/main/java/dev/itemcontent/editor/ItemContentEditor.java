@@ -29,6 +29,16 @@ public final class ItemContentEditor {
             } catch (Exception failure) { failure.printStackTrace(); System.exit(1); }
             return;
         }
+        EditorInstance instance;
+        try {
+            boolean capture = Arrays.asList(args).stream().anyMatch(value -> value.startsWith("--screenshot"));
+            instance = capture ? null : EditorInstance.open(EditorInstance.directory(), args);
+            if (!capture && instance == null) return;
+        } catch (java.io.IOException failure) {
+            JOptionPane.showMessageDialog(null, failure.getMessage(), "Не удалось открыть редактор", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        if (instance != null) Runtime.getRuntime().addShutdownHook(new Thread(instance::close));
         EditorTheme.setup();
         SwingUtilities.invokeLater(() -> {
             EditorPanel panel = new EditorPanel();
@@ -41,6 +51,7 @@ public final class ItemContentEditor {
             frame.setSize(windowSize(available)); frame.setLocationRelativeTo(null);
             frame.addWindowListener(new WindowAdapter() {
                 @Override public void windowClosing(WindowEvent e) { if (panel.mayClose()) frame.dispose(); }
+                @Override public void windowClosed(WindowEvent e) { if (instance != null) instance.close(); }
             });
             frame.setVisible(true);
             for (int index = 0; index + 1 < args.length; index++) {
@@ -53,6 +64,22 @@ public final class ItemContentEditor {
                 Path folder=Path.of(args[index+1]); panel.guarded(() -> panel.loadCatalog(CatalogPaths.locate(folder)));
             }
             if (Arrays.asList(args).contains("--behavior")) ((JTabbedPane) findNamed(panel, "detailsTabs")).setSelectedIndex(1);
+            if (instance != null) instance.onActivation(request -> SwingUtilities.invokeLater(() -> {
+                frame.setExtendedState(frame.getExtendedState() & ~Frame.ICONIFIED);
+                frame.toFront(); frame.requestFocus();
+                for (int index = 0; index + 1 < request.length; index++) {
+                    if (request[index].equals("--open")) {
+                        String file = request[index + 1];
+                        panel.guarded(() -> panel.openRequested(Path.of(file)));
+                    }
+                    if (request[index].equals("--select")) panel.selectItem(request[index + 1]);
+                    if (request[index].equals("--game")) {
+                        Path folder = Path.of(request[index + 1]);
+                        panel.guarded(() -> panel.loadCatalog(CatalogPaths.locate(folder)));
+                    }
+                }
+                if (Arrays.asList(request).contains("--behavior")) ((JTabbedPane) findNamed(panel, "detailsTabs")).setSelectedIndex(1);
+            }));
             if (args.length >= 3 && args[0].equals("--screenshot-catalog")) {
                 try {
                     Path file = Path.of(args[2]); panel.loadCatalog(file);
@@ -547,6 +574,12 @@ public final class ItemContentEditor {
             });
         }
         void selectItem(String identifier) { for (int i=0; i<listModel.size(); i++) if (listModel.get(i).id.equals(identifier)) { list.setSelectedIndex(i); return; } }
+        void openRequested(Path path) throws java.io.IOException {
+            Path absolute = path.toAbsolutePath().normalize();
+            boolean same = document != null && (document.toAbsolutePath().normalize().equals(absolute)
+                    || Files.exists(document) && Files.exists(absolute) && Files.isSameFile(document, absolute));
+            if (!same && mayDiscard()) openList(absolute);
+        }
         void openList(Path path) throws java.io.IOException {
             ItemProject loaded = ItemProject.load(path);
             refreshing = true; project = loaded; current = null; selectedGroup = ""; search.setText(""); refreshing = false; rebuildGroupTabs();

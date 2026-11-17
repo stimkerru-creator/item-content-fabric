@@ -179,7 +179,10 @@ public final class ItemProject {
             object.addProperty("appearance", item.appearance); object.addProperty("custom_model", item.customModel || item.importedAppearance);
             object.addProperty("max_count", item.maxCount); object.addProperty("fireproof", item.fireproof);
             object.addProperty("type", item.type); object.addProperty("group", item.group); object.addProperty("existing", item.existing);
-            object.add("properties", type(item).validate(item.properties, item.existing));
+            var properties = type(item).validate(item.properties, item.existing);
+            if (!item.existing && properties.has("occlusion") && properties.get("occlusion").getAsString().equals("auto"))
+                properties.addProperty("occlusion", item.importedAppearance || type(item).model().equals("chest") ? "open" : "solid");
+            object.add("properties", properties);
             definitions.add(object);
         }
         JsonObject config = new JsonObject(); config.addProperty("version", 2); config.add("items", definitions);

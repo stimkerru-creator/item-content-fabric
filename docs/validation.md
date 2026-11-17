@@ -1,5 +1,24 @@
 # Validation record
 
+## 1.4.1 — 2026-11-17
+
+- Desktop: **77 tests**, zero failures. Coverage includes per-block automatic/manual occlusion,
+  unchanged authoring settings after export, forwarded launches, queued activation during startup,
+  rejection of an unauthenticated local connection, normal shutdown, and a separate JVM killed
+  during the test to verify recovery of the OS instance lock. Reopening the same document retains
+  unsaved edits, including when its original file has been removed externally.
+- Runtime: **14 tests**, zero failures. Real standalone Minecraft server: **16 checks PASS**,
+  including all six neighbour directions for both open imported models and solid full cubes.
+- The real standalone bronze-demo client loaded the rebuilt JAR and its imported models/textures.
+  The quartz face below the support is visible; the actual game screenshot was inspected.
+  Full-block collision was preserved. The test does not claim a 10,000-block performance benchmark.
+- Actual interactive launch: a second JAR invocation exited while the original editor process
+  remained responsive with one editor window. Its requested support item/property tab opened
+  in the existing window. Batch screenshots and command-line mod builds remain separate operations.
+- Windows ZIP: extracted into a path with spaces, removed Java from PATH and supplied an invalid
+  JAVA_HOME. The bundled Java rendered the editor and built both the three-item example mod and
+  a saved one-item selection without an installed compiler.
+
 ## 1.4.0 — 2026-11-17
 
 - Desktop: **70 tests**, zero failures, including saved selection, exact **4000 → 200** export,
